@@ -1,0 +1,50 @@
+/* vim: set expandtab tabstop=2 shiftwidth=2: */
+
+.x-tab img.minus,.x-button img.x-icon-mask.minus{-webkit-mask-image:url('../sencha/resources/themes/images/default/pictos/minus1.png')}
+
+
+.incapacitated {
+  background-color: gray;
+  background-image: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(0%, #999999), color-stop(2%, #999999), color-stop(100%, #999999))
+  }
+
+.selected {
+  background-color: white;
+  background-image: -webkit-gradient(linear, 50% 0%, 50% 100%, color-stop(0%, #FFFFFF), color-stop(2%, #FFFFFF), color-stop(100%, #FFFFFF))
+  }
+
+.bigbutton {
+  height:44px !important;
+  }
+
+.bigtext {
+  height: 36px;
+  line-height: 36px;
+  font-size: 28px;
+  }
+
+.combat {
+  min-width: 700px;
+  }
+
+.battle {
+  }
+
+.m_ac {
+  color: white;
+  }
+
+.pc {
+  height: 30px;
+  padding: 10;
+  border: 1px solid #ddd;
+  background-color: white;
+  }
+
+.pc_list {
+  padding: 0 5px;
+  height: 30px;
+  line-height: 30px;
+  font-size: 21px;
+  background-color: blue;
+  }
