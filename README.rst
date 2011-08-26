@@ -2,4 +2,4 @@ super beta, draft, ugly, etc.
 
 Expects `sencha touch`__ to be at ./sencha
 
-__http://www.sencha.com/products/touch/
+__ http://www.sencha.com/products/touch/
