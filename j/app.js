@@ -1,16 +1,35 @@
 /* vim: set expandtab tabstop=2 shiftwidth=2: */
 String.prototype.contains = function(it) { return this.indexOf(it) != -1; };
 
-Ext.ns('rpgpad.saves');
-
 Ext.regModel('PC', {
   fields: [
+    {name: 'id'},
     {name: 'name',    type: 'string'},
     {name: 'player',  type: 'string'},
     {name: 'ac',      type: 'int'},
     {name: 'hits',    type: 'int'},
-    ]
+    ],
+  proxy: {
+    id: 'players',
+    type: 'localstorage'
+    },
   });
+
+Ext.regModel('Kill', {
+  fields: [
+    {name: 'id'},
+    {name: 'count',   type: 'int'},
+    {name: 'name',    type: 'string'},
+    {name: 'xp',      type: 'int'},
+    ],
+  proxy: {
+    id: 'kills',
+    type: 'localstorage'
+    },
+  });
+
+
+Ext.ns('rpgpad.saves');
 
 rpgpad.saves.clr = [
   [14,26,10,13,15],  // 1
@@ -101,6 +120,7 @@ rpgpad.SpellRecord = function(lvl, segments, name, description) {
     description: description,
     };
   };
+
 rpgpad.spells = {                 // lvl, segments, name, notes
   command:      rpgpad.SpellRecord(1,  1, 'Command', ''),
   curelt:       rpgpad.SpellRecord(1,  5, 'Cure Light', 'd8'),
@@ -313,20 +333,6 @@ rpgpad.monstermanual_SelectBox = function() {
   };
 
 
-Ext.setup({
-  icon: 'i/icon.png',
-  tabletStartupScreen: 'i/startup_tablet.png',
-  phoneStartupScreen: 'i/startup_phone.png',
-  statusBarStyle: 'black',
-  onReady: function() {
-    rpgpad.App = new rpgpad.App({
-      title: 'RPGPad',
-      shortUrl: 'whatever',
-      });
-    rpgpad.App.doComponentLayout();
-    }
-  });
-
 rpgpad.randint = function(start, end) {
   return start + Math.floor(Math.random()*(end+1));
   }
@@ -337,7 +343,6 @@ rpgpad.dice = function(count, sides) {
   for (i=count; i>0; i--) {
     roll = 1 + Math.floor(Math.random()*sides);
     total += roll
-    console.log('d', sides, ': ', roll);
     rpgpad.console.log('d' + sides + ': ' + roll);
     }
   return total
@@ -364,7 +369,6 @@ rpgpad.roll = function(roll) {
     mod = 0;
     }
   total = rpgpad.dice(count, die) + mod;
-  console.log('Dice Roll:', roll, '=', total);
   rpgpad.console.log('Dice Roll: ' + roll + ' = ' + total);
   return total
   }
@@ -863,6 +867,9 @@ rpgpad.new_battle = function() {
             },
           },
           { text: 'End', ui: 'decline', handler: function(button, e) {
+            if (rpgpad.Combat.items.getCount() == 1 && battle.getComponent('b_monsters').items.getCount() == 0) {
+              return;
+              }
             battle.removeAll();
             rpgpad.Combat.remove(battle);
             rpgpad.Combat.doLayout();
@@ -928,11 +935,9 @@ rpgpad.new_battle = function() {
               Ext.each(characters, function(c) { cpool.push(c); });
               }
             function pick_character() {
-              console.log(cpool.length, cpool);
               if (cpool.length == 0) { fill_pool() };
               var c = cpool[rpgpad.randint(0, cpool.length-1)];
               cpool.remove(c);
-              console.log(c, cpool);
               return c
               }
             var html, monsters, characters, cpool=[];
@@ -1057,28 +1062,33 @@ rpgpad.Combat = new Ext.Container({
   });
 
 rpgpad.Bullpen = function() {
-  function Character(name, player, ac, hp) {
+  function Character(record) {
     return new Ext.Button({
       text: name,
-      model: Ext.ModelMgr.create({
-        name: name,
-        player: player,
-        hits: hp,
-        AC: ac,
-        }, 'PC'),
+      model: record,
       cls: 'pc_button',
       handler: function(button, e) {
         character_edit_overlay.show_pc(this);
         },
-      update_stuff: function() {
+      listeners: {
+        added: {
+          fn: function() {
+            this._update();
+            },
+          },
+        },
+      _update: function() {
         this.ac = this.model.data.ac;
         this.name = this.model.data.name;
         this.setText(this.model.data.name);
         this.setBadge(this.model.data.hits);
+        return this;
         },
       hitpoints: function(delta) {
         this.model.data.hits += delta;
+        this.model.save();
         this.setBadge(this.model.data.hits);
+        return this;
         },
       });
     }
@@ -1110,10 +1120,6 @@ rpgpad.Bullpen = function() {
       label: 'HP',
       minValue: 1,
       },
-      { xtype: 'button', text :'Done', flex:2, margin:'12 4 4 4', ui:'confirm', handler: function(button, e) {
-        this.up('panel').hide();
-        },
-      },
     ],
     dockedItems: [
       new Ext.Toolbar({
@@ -1127,7 +1133,8 @@ rpgpad.Bullpen = function() {
     listeners: {
       beforehide: function(me) {
         me.updateRecord(me.pc.model);
-        me.pc.update_stuff();
+        me.pc.model.save();
+        me.pc._update();
         },
       beforesubmit: function(me) { return false; },
       },
@@ -1143,6 +1150,14 @@ rpgpad.Bullpen = function() {
             },
           })
         });
+      dock.add( { text: 'Remove', handler: function(button, e) {
+            character_edit_overlay.hide();
+            rpgpad.Combat.remove_character(character_edit_overlay.pc);
+            rpgpad.Bullpen.remove(character_edit_overlay.pc);
+            rpgpad.Bullpen.character_store.remove(character_edit_overlay.pc.model);
+            rpgpad.Bullpen.character_store.sync();
+            },
+          });
       dock.add( { text: 'To Bullpen', handler: function(button, e) {
             character_edit_overlay.hide();
             rpgpad.Combat.remove_character(character_edit_overlay.pc);
@@ -1153,14 +1168,26 @@ rpgpad.Bullpen = function() {
       this.show();
       },
   });
+
   return new Ext.Panel({
+    launch: function() {
+      rpgpad.Bullpen.character_store.load();
+      rpgpad.Bullpen.character_store.each(function(record) {
+        rpgpad.Bullpen.add(new Character(record));
+        });
+      rpgpad.Bullpen.doLayout();
+      },
+    character_store: new Ext.data.Store({
+      model: 'PC',
+      autoLoad: false,
+      }),
     cls: 'characters',
     height: '100%',
     scroll: 'vertical',
     flex: 1,
     layout: { type: 'vbox', align: 'stretch' },
     defaults: {margin: 6, },
-    items: [ ],
+    items: [],
     dockedItems: [
       new Ext.Toolbar({
         dock: 'top',
@@ -1169,7 +1196,12 @@ rpgpad.Bullpen = function() {
         defaults: {margin: 6, },
         items: [
           { text: 'New', ui: 'confirm', handler: function(button, e) {
-            var pc = new Character('', 'dm', 'fighter', 1, 10, 1);
+            var pc = new Character(Ext.ModelMgr.create({
+                name: '',
+                player: '',
+                hits: 4,
+                AC: 9,
+                }, 'PC'));
             character_edit_overlay.show_pc(pc);
             rpgpad.Bullpen.add(pc);
             rpgpad.Bullpen.doLayout();
@@ -1179,8 +1211,7 @@ rpgpad.Bullpen = function() {
         }),
       ],
     });
-  }()
-
+  }();
 
 rpgpad.CombatTab = new Ext.Panel({
   title: 'Combat',
@@ -1191,48 +1222,76 @@ rpgpad.CombatTab = new Ext.Panel({
   items: [rpgpad.Combat, rpgpad.Bullpen,],
   });
 
-
 rpgpad.KillTab = new Ext.Panel({
   title: 'Death Toll',
-  deadpile: {},
-  prisonpile: {},
-  xp: 0,
+  pile_store: new Ext.data.Store({
+    model: 'Kill',
+    autoLoad: false,
+    listeners: {
+      datachanged: {
+        fn: function(store) {
+          var xp = store.sum('xp');
+          rpgpad.KillTab.xp.update('<h2>'+ Math.floor(xp*1.2) + ' Monster Experience ' + xp + '</h2>');
+          },
+        },
+      },
+    }),
   cls: 'deathtoll',
   iconCls: 'x-icon-mask trash',
   height: '100%',
   width: '100%',
   scroll: 'vertical',
-  layout: { type: 'vbox', align: 'stretch' },
-  defaults: { margin:'0 0 0 10 ', styleHtmlContent: true, },
+  layout: { type: 'vbox', align: 'stretch', pack: 'start', },
   items: [
-    { xtype: 'component', itemId: 'kt_xp', padding: 10, centered: true, },
+    new Ext.Container({
+      height: 40,
+      layout: { type: 'hbox', align: 'stretch', pack: 'start', },
+      items: [
+        new Ext.Button({
+          text: 'Clear List',
+          margin: 5,
+          padding: '4 10 4 10',
+          handler: function(button, e) {
+            rpgpad.KillTab.empty();
+            },
+          }),
+        { xtype: 'component', margin: '0 0 0 60', padding: 0, styleHtmlContent: true},
+        ],
+      }),
+    { xtype: 'list', itemTpl:'{count} {name}, {xp} xp', store: null,
+      disableSelection: true, loadingText: 'Loading...',
+      scroll: 'vertical',
+    },
     ],
+  launch: function() {
+    this.xp = this.items.getAt(0).items.getAt(1);
+    this.pile = this.items.getAt(1);
+    this.pile.tpl = '<tpl for="."><div class="x-list-item-body">{count} {name}, {xp} xp</div></tpl>';
+    this.pile_store.load();
+    rpgpad.KillTab.pile.bindStore(rpgpad.KillTab.pile_store);
+    },
+  empty: function() {
+    this.pile_store.proxy.clear();
+    this.pile_store.load();
+    },
   record_death: function(monster) {
-    this.record(monster, this.deadpile, false);
+    rpgpad.console.log('"' + monster.name + '" Defeated for <b>' + monster.xp+ 'xp</b>.');
+    this._upsert(monster.mm.name, monster.xp);
     },
   record_capture: function(monster) {
-    this.record(monster, this.prisonpile, true);
+    var xp = 2 * monster.xp;
+    rpgpad.console.log('"' + monster.name + '" Captured for <b>' + xp + 'xp</b>.');
+    this._upsert('(c)' + monster.mm.name, xp);
     },
-  record: function(monster, pile, capture) {
-    var name = monster.mm.name
-    var key = 'kt_' + name;
-    if (!(key in pile)) {
-      pile[key] = 0;
-      this.add({ xtype: 'component', itemId: key });
+  _upsert: function(name, xp) {
+    var record = this.pile_store.findRecord('name', name);
+    if (record == null) {
+      record = Ext.ModelMgr.create({count: 0, xp: 0, name: name}, 'Kill');
       }
-    pile[key] += 1;
-    if (capture == true) {
-      this.xp += (2 * monster.xp);
-      this.getComponent(key).update('<h4>' + pile[key] + ' ' + name + ' (captured)</h4>');
-      rpgpad.console.log('"' + monster.name + '" Captured for <b>' + monster.xp*2 + 'xp</b>.');
-      }
-    else {
-      this.xp += monster.xp;
-      this.getComponent(key).update('<h4>' + pile[key] + ' ' + name + '</h4>');
-      rpgpad.console.log('"' + monster.name + '" Defeated for <b>' + monster.xp*2 + 'xp</b>.');
-      }
-    this.getComponent('kt_xp').update('<h1>'+ Math.floor(this.xp*1.2) + ' / ' + this.xp + ' Monster Experience</h1>');
-    this.doLayout();
+    record.data.count += 1;
+    record.data.xp += xp;
+    record.save();
+    this.pile_store.load();
     },
   });
 
@@ -1287,10 +1346,15 @@ rpgpad.ConsoleTab = new Ext.Panel({
 rpgpad.console = {
   log: function(msg) {
     rpgpad.ConsoleTab.update('<li>' + msg + '</li>' + rpgpad.ConsoleTab.html);
-    }
-  }
+    },
+  clear: function() {
+    rpgpad.ConsoleTab.update('');
+    },
+  };
 
-rpgpad.App = Ext.extend(Ext.TabPanel, {
+rpgpad.Main = Ext.extend(Ext.TabPanel, {
+  title: 'RPGPad',
+  shortUrl: 'https://github.com/njharman/rpgpad',
   fullscreen: true,
   cardSwitchAnimation: { type:'cube', cover:true },
   tabBar: { dock:'bottom', layout:{ type:'hbox', align:'stretch', pack:'justify' } },
@@ -1300,5 +1364,21 @@ rpgpad.App = Ext.extend(Ext.TabPanel, {
     rpgpad.LootTab,
     rpgpad.TreasureTab,
     rpgpad.ConsoleTab,
-    ]
+    ],
+  launch: function() {
+    rpgpad.KillTab.launch();
+    rpgpad.Bullpen.launch();
+    },
   });
+
+Ext.setup({
+  icon: 'i/icon.png',
+  tabletStartupScreen: 'i/startup_tablet.png',
+  statusBarStyle: 'black',
+  onReady: function() {
+    rpgpad.App = new rpgpad.Main();
+    rpgpad.App.launch();
+    rpgpad.App.doComponentLayout();
+    }
+  });
+

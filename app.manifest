@@ -1,6 +1,5 @@
 CACHE MANIFEST
-# RPGPad 0.1.1
-
+# RPGPad v0.2.0
 
 index.html
 j/app.js
@@ -9,3 +8,7 @@ c/app.css
 c/sencha-touch.css
 i/icon.png
 i/startup_tablet.png
+i/minus1.png
+
+NETWORK:
+*
