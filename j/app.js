@@ -112,6 +112,9 @@ rpgpad.spells = {                 // lvl, segments, name, notes
   augurary:     rpgpad.SpellRecord(1,100, 'Augurary', ''),
   locateobject: rpgpad.SpellRecord(1,100, 'Locate Object', ''),
   contdark:     rpgpad.SpellRecord(1,  6, 'Continual Darkness', ''),
+  resistfire:   rpgpad.SpellRecord(1,  6, 'Resist Fire', '+3, half damage'),
+  causeblind:   rpgpad.SpellRecord(1,  6, 'Cause Blindness', ''),
+  prayer:       rpgpad.SpellRecord(1,  6, 'Prayer', '+1/-1 all rolls'),
   };
 rpgpad.Spell = function(spell) {
   return { cast: false, data: rpgpad.spells[spell] };
@@ -225,16 +228,21 @@ rpgpad.BadGuyRecord = function(lvl, hitdie, hdbonus, hpmin, ac, xp, special, kla
 
 rpgpad.monstermanual = {
                     // lvl, hitdie, hdbonus, hpmin, ac, xp, special, saves
+  'War Dog':        rpgpad.MonsterRecord(2, 2, 10, 4, 'barding').attack('bite', '+3 2d4'),
+
   'Guard (xbow)':   rpgpad.BadGuyRecord(0, 4, 3,  1, 5, 0, 'scale/sh').attack('lng sw', '+0 d8').attack('lt xbow', '+0 d6+1'),
   'Guard (spear)':  rpgpad.BadGuyRecord(0, 4, 3,  1, 5, 0, 'scale/sh').attack('spear', '+0 d6'),
   'Guard (pole)':   rpgpad.BadGuyRecord(0, 4, 3,  1, 5, 0, 'mail').attack('pole', '+0 d10'),
-  'Sgt (xbow)':     rpgpad.BadGuyRecord(2,10, 0, 15, 4, 0, 'mail/sh').attack('mstar', '+1 2d4').attack('lt xbow', '+1 d6+1'),
-  'Lt (lbow)':      rpgpad.BadGuyRecord(4,10, 3, 31, 1, 0, 'p climb, plate/sh/-1').attack('lbow', '+3 d6/+3 d6').attack('haxe', '+3 d6+1'),
-  'Acolyte':        rpgpad.BadGuyRecord(2, 8, 1, 10, 1, 0, 'pain mace, banded/-3, 16 17 18 17 15 14').attack('mace', '+1 d6+2').spelllist('curelt', 'command', 'curse', 'sanctuary'),
-  'Lareth':         rpgpad.BadGuyRecord(5, 8, 2, 44,-1, 0, 'x2-3staff, im para, +1plate/-3, 18 17 18 17 16 18').attack('staff/mace', '+6 d6+5/+1 d4+2').spelllist('curelt', 'curelt', 'command', 'protgood', 'sanctuary', 'holdperson', 'holdperson', 'silence15', 'silence15', 'augurary', 'locateobject', 'contdark'),
+  'Sgt (xbow)':     rpgpad.BadGuyRecord(2,10, 0, 15, 4, 0, 'p unholy, mail/sh').attack('mstar', '+1 2d4').attack('lt xbow', '+1 d6+1'),
+  'Lt (lbow)':      rpgpad.BadGuyRecord(4,10, 3, 31, 1, 0, 'p heal, plate/sh/-1').attack('lbow', '+3 d6/+3 d6').attack('haxe', '+3 d6+1'),
+  'Alcolyte':       rpgpad.BadGuyRecord(1, 8, 0,  4, 4, 0, 'p unholy, banded').attack('mace', '+1 d6+2').spelllist('curelt', 'bless', 'curse', 'command'),
+  'Apprentice':     rpgpad.BadGuyRecord(2, 8, 1, 10, 1, 0, 'p climb, pain mace, banded/-3, 16 17 18 17 15 14').attack('mace', '+1 d6+2').spelllist('curelt', 'command', 'curse', 'sanctuary'),
+  'Lareth':         rpgpad.BadGuyRecord(5, 8, 1, 39,-2, 0, 'x2-3staff, im para, +1plate/-4, 18 17 18 18 15 18').attack('staff/mace', '+6 d6+5/+1 d4+2').spelllist('curelt', 'curelt', 'command', 'protgood', 'sanctuary', 'holdperson', 'holdperson', 'silence15', 'silence15', 'resistfire', 'prayer', 'contdark'),
 
                     // HD, hpbonus, hpmin, ac, special
-  'War Dog':        rpgpad.MonsterRecord(2, 2, 10, 4, 'barding').attack('bite', '+3 2d4'),
+  'Skeleton':       rpgpad.MonsterRecord(1, 0,  1, 7, 'imm cold/sleep/charm/hold/mental').attack('melee', '+1 d6'),
+  'Zombie':         rpgpad.MonsterRecord(2, 0,  1, 8, 'imm cold/sleep/charm/hold/mental').attack('melee', '+2 d8'),
+  'Zombie Xvart':   rpgpad.MonsterRecord(3, 0,  8, 8, 'electrical, imm cold/sleep/charm/hold/mental').attack('melee', '+3 d8'),
 
   'Wolf':           rpgpad.MonsterRecord(2, 2,  2, 7, '10').attack('bite', '+3 d4+1'),
   'Lilwere':        rpgpad.MonsterRecord(2, 1, 10, 3, '8 1-3sup, silv/magic').attack('bite', '+3 d4'),
@@ -252,17 +260,15 @@ rpgpad.monstermanual = {
 
   'Ogre':           rpgpad.MonsterRecord(4, 1, 20, 5, '').attack('melee', '+5 d10').attack('rock', '+4 d6'),
 
-  'Skeleton':       rpgpad.MonsterRecord(1, 0,  1, 7, 'imm cold/sleep/charm/hold/mental').attack('melee', '+1 d6'),
   'Zombling':       rpgpad.MonsterRecord(1, 0,  1, 8, 'leap').attack('melee', '+1 d4'),
-  'Zombie':         rpgpad.MonsterRecord(2, 0,  1, 8, 'imm cold/sleep/charm/hold/mental').attack('melee', '+2 d8'),
-  'Zombie Xvart':   rpgpad.MonsterRecord(3, 0,  1, 8, 'electrical, imm cold/sleep/charm/hold/mental').attack('melee', '+3 d8'),
   'Zombie Turtle':  rpgpad.MonsterRecord(6, 0, 36, 2, 'imm cold/sleep/charm/hold/mental').attack('c/c/b', '+4 d6/+4 d6/+6 2d8'),
   'Ghoul':          rpgpad.MonsterRecord(2, 0,  2, 6, 'para, imm sleep/charm').attack('c/c/b', '+2 d3/+2 d3/+2 d6'),
 
   'Gobo (sbow)':    rpgpad.MonsterRecord(1,-1,  2, 6, '').attack('melee', '+0 d6').attack('sbow', '+1 d4/+1 d4'),
   'Gobo (dart)':    rpgpad.MonsterRecord(1,-1,  2, 6, '').attack('dart', '+1 d2/+1 d2/+1 d2').attack('melee', '+0 d6'),
 
-  'Bogling (blow)': rpgpad.MonsterRecord(0, 0,  2, 7, 'dart poison (+2Para) ').attack('nat', '-1 d4').attack('blowgun', '+0 d2'),
+  'Bogling (blow)': rpgpad.MonsterRecord(0, 0,  2, 7, 'leap dart poison (+2Para) ').attack('nat', '-1 d4').attack('blowgun', '+0 d2'),
+  'Bog Chief':      rpgpad.MonsterRecord(1, 0,  4, 5, '').attack('nat', '1 d4'),
 
   'Orc (xbow)':     rpgpad.MonsterRecord(1, 0,  2, 6, 'scale').attack('scim', '+1 d8').attack('lt xbow', '+1 d6+1'),
   'Orc (sbow)':     rpgpad.MonsterRecord(1, 0,  2, 6, 'scale').attack('scim', '+1 d8').attack('sbow', '+1 d6/+1 d6'),
