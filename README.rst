@@ -21,6 +21,7 @@ TODO
 
     - Refactor buttugly code/structure into something not so embarrasing.
     - Bug fixes, which implies unittests.
+    - Local storage of unique monsters' state.
     - Better/complete offline storage, offline work.
     - Upload data to server/email.
     - Add loot to monsters.
