@@ -159,7 +159,7 @@ rpgpad.MonsterRecord = function(hd, hpbonus, hpmin, ac, special) {
     count: 0,
     hitdice: function() {
       if (hd == 0) { return '1/2HD'; }
-      else if (hpbonus != 0) { return hd + '' + hpbonus + 'HD '; }
+      else if (hpbonus != 0) { return hd + '+' + hpbonus + 'HD '; }
       else { return hd + 'HD '; }
       }(),
     ac: ac,
@@ -248,8 +248,6 @@ rpgpad.BadGuyRecord = function(lvl, hitdie, hdbonus, hpmin, ac, xp, special, kla
 
 rpgpad.monstermanual = {
                     // lvl, hitdie, hdbonus, hpmin, ac, xp, special, saves
-  'War Dog':        rpgpad.MonsterRecord(2, 2, 10, 4, 'barding').attack('bite', '+3 2d4'),
-
   'Guard (xbow)':   rpgpad.BadGuyRecord(0, 4, 3,  1, 5, 0, 'scale/sh').attack('lng sw', '+0 d8').attack('lt xbow', '+0 d6+1'),
   'Guard (spear)':  rpgpad.BadGuyRecord(0, 4, 3,  1, 5, 0, 'scale/sh').attack('spear', '+0 d6'),
   'Guard (pole)':   rpgpad.BadGuyRecord(0, 4, 3,  1, 5, 0, 'mail').attack('pole', '+0 d10'),
@@ -258,6 +256,8 @@ rpgpad.monstermanual = {
   'Alcolyte':       rpgpad.BadGuyRecord(1, 8, 0,  4, 4, 0, 'p unholy, banded').attack('mace', '+1 d6+2').spelllist('curelt', 'bless', 'curse', 'command'),
   'Apprentice':     rpgpad.BadGuyRecord(2, 8, 1, 10, 1, 0, 'p climb, pain mace, banded/-3, 16 17 18 17 15 14').attack('mace', '+1 d6+2').spelllist('curelt', 'command', 'curse', 'sanctuary'),
   'Lareth':         rpgpad.BadGuyRecord(5, 8, 1, 39,-2, 0, 'x2-3staff, im para, +1plate/-4, 18 17 18 18 15 18').attack('staff/mace', '+6 d6+5/+1 d4+2').spelllist('curelt', 'curelt', 'command', 'protgood', 'sanctuary', 'holdperson', 'holdperson', 'silence15', 'silence15', 'resistfire', 'prayer', 'contdark'),
+
+  'War Dog':        rpgpad.MonsterRecord(2, 2, 10, 4, 'barding').attack('bite', '+3 2d4'),
 
                     // HD, hpbonus, hpmin, ac, special
   'Skeleton':       rpgpad.MonsterRecord(1, 0,  1, 7, 'imm cold/sleep/charm/hold/mental').attack('melee', '+1 d6'),
@@ -466,7 +466,8 @@ rpgpad.ridiculous_select =
 
 
 rpgpad.new_battle = function() {
-  function CharacterList() {
+  function BattleHeader() {
+    // Battle title and list of participating characters
     var mything = new Ext.Container({
       itemId: 'b_characters',
       cls: 'pc_list',
@@ -474,19 +475,13 @@ rpgpad.new_battle = function() {
       items: [ { xtype: 'component', flex:1 }, ],
       // Attributes
       _title: 'Battle' + rpgpad.battle_count,
-      _monster_count: 0,
       _characters: [],
       // Methods
       update_text: function() {
-        var txt = this._title + ' (' + this._monster_count + '):';
+        var txt = this._title + ':';
         Ext.each(this._characters, function(c) { txt += ' ' + c.model.data.name; });
         this.getComponent(0).update(txt);
         this.getComponent(0).doComponentLayout();
-        },
-      monster_count: function(count) {
-        this._monster_count = count;
-        this.update_text();
-        return this._monster_count;
         },
       add_character: function(character) {
         if (this._characters.indexOf(character) == -1 ) { this._characters.push(character) };
@@ -549,7 +544,7 @@ rpgpad.new_battle = function() {
           },
         },
         { xtype:'textfield', itemId:'hitpoints', width:30, padding:0, centered:true, value:hitpoints, },
-        { iconMask: true, iconCls: 'minus', ui:'plain', padding:'17 15 0 5', handler: function(button, e) {
+        { iconMask: true, iconCls: '/minus.png', ui:'plain', padding:'17 15 0 5', handler: function(button, e) {
           monster.hitpoints(-1);
           },
         },
@@ -570,17 +565,22 @@ rpgpad.new_battle = function() {
         }
       };
     monster.hitpoints = function(delta) {
-      var hitpoints = monster.getComponent('hitpoints');
-      var value = parseInt(hitpoints.getValue());
-      hitpoints.setValue(value + delta);
-      if (hitpoints.getValue() < 0) { monster.dead(false) };
-      return hitpoints.getValue();
+      var control = monster.getComponent('hitpoints');
+      var hitpoints = parseInt(control.getValue()) + delta;
+      control.setValue(hitpoints);
+      if (hitpoints < 0) {
+        monster.dead();
+        };
+      return hitpoints;
       };
-    monster.dead = function(captured) {
-      if (captured == true) { rpgpad.KillTab.record_capture(monster); }
-      else { rpgpad.KillTab.record_death(monster) }
-      if (monster.treasure) { rpgpad.LootTab.record(monster) }
-      battle.del_monster(monster);
+    monster.dead = function() {
+      rpgpad.KillTab.record_death(monster);
+      battle.remove_monster(monster);
+      monster.destroy();
+      };
+    monster.captured = function() {
+      rpgpad.KillTab.record_capture(monster);
+      battle.remove_monster(monster);
       monster.destroy();
       };
     monster.incapacitate = function(rounds) {
@@ -663,7 +663,7 @@ rpgpad.new_battle = function() {
       { text: 'To Dead Pile', ui:'decline', handler: function(button, e) { Ext.each(action_overlay._monsters, function(m) { m.dead(false) }); action_overlay.hide(); }, },
       { text: 'To Captured', ui:'decline', handler: function(button, e) { Ext.each(action_overlay._monsters, function(m) { m.dead(true) }); action_overlay.hide(); }, },
       { text: 'Remove', ui: 'decline', margin:10, handler: function(button, e) {
-        Ext.each(action_overlay._monsters, function(m) { battle.del_monster(m) });
+        Ext.each(action_overlay._monsters, function(m) { battle.remove_monster(m) });
         battle.doComponentLayout();
         action_overlay.hide();
         },
@@ -852,7 +852,7 @@ rpgpad.new_battle = function() {
     title: 'Battle_' + rpgpad.battle_count,
     cls: 'battle',
     layout: { type: 'vbox', align: 'stretch' },
-    items: [ CharacterList(), MonsterList() ],
+    items: [ BattleHeader(), MonsterList() ],
     dockedItems: [
       new Ext.Toolbar({
         dock : 'top',
@@ -988,20 +988,17 @@ rpgpad.new_battle = function() {
       return html;
       },
     add_monster: function(monster) {
-      characters = battle.getComponent('b_characters');
       monsters = battle.getComponent('b_monsters');
       monsters.add(monster);
       monsters.doLayout();
-      characters.monster_count(monsters.items.length);
       rpgpad.Combat.doLayout();
       rpgpad.console.log('"' + monster.name + '" Added.');
       return monster;
       },
-    del_monster: function(monster) {
+    remove_monster: function(monster) {
       monsters = battle.getComponent('b_monsters');
       monsters.remove(monster);
       monsters.doLayout();
-      characters.monster_count(monsters.items.length);
       rpgpad.Combat.doLayout();
       rpgpad.console.log('"' + monster.name + '" Removed.');
       return monster;
@@ -1258,15 +1255,15 @@ rpgpad.KillTab = new Ext.Panel({
         { xtype: 'component', margin: '0 0 0 60', padding: 0, styleHtmlContent: true},
         ],
       }),
-    { xtype: 'list', itemTpl:'{count} {name}, {xp} xp', store: null,
+    { xtype: 'list', store: null, scroll: 'vertical',
       disableSelection: true, loadingText: 'Loading...',
-      scroll: 'vertical',
+      itemTpl:'{count} {name}, {xp} xp',
+      tpl: '<tpl for="."><div class="x-list-item-body">{count} {name}, {xp} xp</div></tpl>',
     },
     ],
   launch: function() {
     this.xp = this.items.getAt(0).items.getAt(1);
     this.pile = this.items.getAt(1);
-    this.pile.tpl = '<tpl for="."><div class="x-list-item-body">{count} {name}, {xp} xp</div></tpl>';
     this.pile_store.load();
     rpgpad.KillTab.pile.bindStore(rpgpad.KillTab.pile_store);
     },
@@ -1275,7 +1272,7 @@ rpgpad.KillTab = new Ext.Panel({
     this.pile_store.load();
     },
   record_death: function(monster) {
-    rpgpad.console.log('"' + monster.name + '" Defeated for <b>' + monster.xp+ 'xp</b>.');
+      rpgpad.console.log('"' + monster.name + '" Defeated for <b>' + monster.xp+ 'xp</b>.');
     this._upsert(monster.mm.name, monster.xp);
     },
   record_capture: function(monster) {
