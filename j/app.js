@@ -195,12 +195,13 @@ rpgpad.roll = function(roll) {
 
 
 rpgpad.SpellBook = function() {
-  function SpellRecord(lvl, segments, name, description) {
+  function SpellRecord(lvl, segments, name, duration, description) {
     // Create Spell Record
     return {
       lvl: lvl,
       name: name,
       segments: segments,
+      duration: duration,
       description: description,
       cast: function(caster, target) {
         if (this.description) {
@@ -226,24 +227,28 @@ rpgpad.SpellBook = function() {
       foo.casted = false;
       return foo;
       },
-    spells: {               // lvl, segments, name, notes
-      command:      SpellRecord(1,  1, 'Command', ''),
-      curelt:       SpellRecord(1,  5, 'Cure Light', 'd8'),
-      curse:        SpellRecord(1, 10, 'Curse', '-1 tohit'),
-      sanctuary:    SpellRecord(1,  4, 'Sanctuary', 'save vs SpellRecord to attack'),
-      protgood:     SpellRecord(1,  4, 'Prot vs Good', ''),
-      holdperson:   SpellRecord(1,  5, 'Hold Person', ''),
-      silence15:    SpellRecord(1,  5, 'Silence 15r', ''),
-      augurary:     SpellRecord(1,100, 'Augurary', ''),
-      locateobject: SpellRecord(1,100, 'Locate Object', ''),
-      contdark:     SpellRecord(1,  6, 'Continual Darkness', ''),
-      resistfire:   SpellRecord(1,  6, 'Resist Fire', '+3, half damage'),
-      causeblind:   SpellRecord(1,  6, 'Cause Blindness', ''),
-      prayer:       SpellRecord(1,  6, 'Prayer', '+1/-1 all rolls'),
+    spells: {               // lvl, segments, name, duration, notes
+      command:      SpellRecord(1,  1, 'Command', '1rds', ''),
+      detectmagic:  SpellRecord(1, 10, 'Detect Magic', '1turns', ''),
+      curelt:       SpellRecord(1,  5, 'Cure Light', 'perm', 'd8'),
+      curse:        SpellRecord(1, 10, 'Curse', '6rds', '-1 tohit'),
+      bless:        SpellRecord(1, 10, 'Bless', '6rds', '+1 tohit'),
+      sanctuary:    SpellRecord(1,  4, 'Sanctuary', '2rds+1/lvl', 'save vs Spell to attack'),
+      protgood:     SpellRecord(1,  4, 'Prot vs Good', '3rds/lvl', '-2 tohit, +2 saves'),
+      aid:          SpellRecord(2,  4, 'Aid', '1rds+1/lvl', 'bless + d8hp'),
+      holdperson:   SpellRecord(2,  5, 'Hold Person', '4rds+1/lvl', '-2 one, -1 two, -0 three. '),
+      silence15:    SpellRecord(2,  5, 'Silence 15r', '2rds/lvl', ''),
+      augury:       SpellRecord(2,100, 'Augurary', 'inst', ''),
+      resistfire:   SpellRecord(2,  6, 'Resist Fire', '1turns/lvl', 'imm normal. +3, half damage'),
+      speakanimals: SpellRecord(2,  5, 'Speak w/ Animals', '2rnds/lvl', ''),
+      locateobject: SpellRecord(3,100, 'Locate Object', '1rnds/lvl', "60'+10'/lvl"),
+      contdark:     SpellRecord(3,  6, 'Continual Darkness', 'perm', '60\'r'),
+      causeblind:   SpellRecord(3,  6, 'Cause Blindness', 'perm', ''),
+      prayer:       SpellRecord(3,  6, 'Prayer', '1rd/lvl', '+1/-1 all rolls'),
+      dispel:       SpellRecord(3,  6, 'Dispel Magic', 'inst', '30\'r, 50% +5/-2 per lvl diff'),
       },
     }
   }();
-
 
 
 rpgpad.MonsterManual = function() {
@@ -252,34 +257,51 @@ rpgpad.MonsterManual = function() {
     // "Record" being constructor function that create "smart" data records.
     calc_loot: function() { return [] },
     calc_spells: function() { return [] },
-    // TODO: this is one attack routine, need method to define multiple attacks (which can hit multiple targets)
-    parse_attack_routine: function(type, text) {
-      // given ('lbow', '+3 d6/+3 d6') return list of {tohit, damage}
+    parse_attack_routine: function(type, text, melee, ranged) {
+      // ('claws', '+3 d6/+3 d6').  melee if melee attackable, ranged if ranged attackable, can be both.
       var bits, attacks = [];
       Ext.each(text.split('/'), function(attack) {
         bits = attack.split(' ');
         attacks.push({type: type, text:attack, tohit:parseInt(bits[0]), damage:bits[1]});
         });
-      return {type: type, text: text, attacks: attacks};
+      return {type: type, text: text, melee: melee, ranged: ranged, attacks: attacks};
       },
-    // following are meant to be chained record.Mob(blah).attack(blah).attack(blah).spelllist(foo,bar)
-    attack: function(type, attacks) {
-      // adds attack option to mob type
-      this.attacks.push(this.parse_attack_routine(type, attacks));
+    // Following methods are meant to be chained record.Mob(blah).routine(blah).routine(blah).spelllist(foo,bar)
+    routine: function(type, attacks, ranged) {
+      // Adds routine(1 target) attack option to mob type.
+      this.attack_options.push(this.parse_attack_routine(type, attacks, true, ranged));
+      return this;
+      },
+    ranged: function(type, attacks, melee) {
+      // Adds ranged(multi targets) attack option to mob type.
+      this.attack_options.push(this.parse_attack_routine(type, attacks, melee, true));
+      return this;
+      },
+    multi: function() {
+      // Adds melee(multi targets) attack option to mob type.
+      var multis = Array.prototype.slice.call(arguments); // variable arguments
+      var type='', text='', attacks = [];
+      Ext.each(multis, function(stuff) {
+          // TODO: implement join
+        type += stuff[0] + ',';
+        text += stuff[1] + '/';
+        attacks.push(this.parse_attack_routine(stuff[0], stuff[1], true))
+        }, this);
+      this.attack_options.push({type:type, text:text, multi:true, melee:true, attacks:attacks});
       return this;
       },
     spelllist: function() {
-      // adds specific spell list to mob type
+      // Adds specific spell list to mob type.
       var spells = Array.prototype.slice.call(arguments); // variable arguments
+      var list = [];
+      Ext.each(spells, function(spell) { list.push(rpgpad.SpellBook.memorize(spell)) });
       this.calc_spells = function() {
-        var list = [];
-        Ext.each(spells, function(spell) { list.push(rpgpad.SpellBook.memorize(spell)) });
         return list;
         };
       return this;
       },
     treasure: function() {
-      // adds specific treasure to mob type
+      // Adds specific treasure to mob type.
       var loots = Array.prototype.slice.call(arguments); // variable arguments
       this.calc_loot = function() {
         var list = [];
@@ -310,15 +332,15 @@ rpgpad.MonsterManual = function() {
     mob.HD = HD;
     mob.saves = rpgpad.saves.mon[ function(HD, bonus) { if (HD > 0 && bonus > 0) { return HD+2 } else { return HD+1 } }(HD, hpbonus) ];
     mob.special = special;
-    mob.attacks = [];
+    mob.attack_options = [];
     mob.calc_hp = function() {
                       // d6+2 aka 3-8 hitpoints for monsters
-      function hp(hd) {rpgpad.dice(hd, 6) + (hd*2) + hpbonus};
+      function roll_hp(hd) {return rpgpad.dice(hd, 6) + (hd*2) + hpbonus};
       var roll;
       if (HD > 1) { // max(8) first HD
-        roll = 8 + hp(HD-1);
+        roll = 8 + roll_hp(HD-1);
       } else if (HD == 1) {
-        roll = hp(1);
+        roll = roll_hp(1);
       } else { // 0HD assumed d4 hp
         roll = rpgpad.dice(1, 4) + hpbonus
         }
@@ -328,6 +350,7 @@ rpgpad.MonsterManual = function() {
     };
   function BadGuyRecord(type, lvl, hitdie, conbonus, hpmin, ac, xp, special, klass, saves) {
     // Record creation helper for human/demihuman mobs
+    // hitdie is size of dice to roll per level
     if (klass == undefined) { klass='ftr'; saves = rpgpad.saves.ftr };
     poop = Object.spawn(Mob, {
       count: 0,
@@ -337,7 +360,7 @@ rpgpad.MonsterManual = function() {
       HD: lvl,
       saves: saves[lvl],
       special: special,
-      attacks: [],
+      attack_options: [],
       calc_hp: function() {
         var dice = Math.max(1, lvl);
         var roll = rpgpad.dice(dice, hitdie) + (dice*conbonus);
@@ -358,80 +381,100 @@ rpgpad.MonsterManual = function() {
       return list;
       },
     reset_counts: function() {
-      // monsters have seq #1 foo, #2 foo. reset that.
+      // mobs have seq #1 foo, #2 foo. reset that.
       Ext.each(this.data, function(m) {
         m.count = 0;
         });
         },
     data: [                // type, lvl, hitdie, hdbonus, hpmin, ac, xp, special, saves
-      BadGuyRecord('Guard (xbow)', 0, 4, 3,  1, 5, 0, 'scale/sh').attack('lt xbow', '+0 d6+1').attack('lng sw', '+0 d8'),
-      BadGuyRecord('Guard (spear)', 0, 4, 3,  1, 5, 0, 'scale/sh').attack('spear', '+0 d6'),
-      BadGuyRecord('Guard (pole)', 0, 4, 3,  1, 5, 0, 'mail').attack('pole', '+0 d10'),
-      BadGuyRecord('Sgt (xbow)', 2,10, 0, 15, 4, 0, 'p unholy, mail/sh').attack('mstar', '+1 2d4').attack('lt xbow', '+1 d6+1'),
-      BadGuyRecord('Lt (lbow)', 4,10, 3, 31, 1, 0, 'p heal, plate/sh/-1').attack('lbow', '+3 d6/+3 d6').attack('haxe', '+3 d6+1'),
-      BadGuyRecord('Lareth', 5, 8, 1, 39,-2, 0, 'x2-3staff, im para, +1plate/-4, 18 17 18 18 15 18').attack('staff/mace', '+6 d6+5/+1 d4+2').spelllist('curelt', 'curelt', 'command', 'protgood', 'sanctuary', 'holdperson', 'holdperson', 'silence15', 'silence15', 'resistfire', 'prayer', 'contdark'),
-      BadGuyRecord('Alcolyte', 1, 8, 0,  4, 4, 0, 'p unholy, banded').attack('mace', '+1 d6+2').spelllist('curelt', 'bless', 'curse', 'command'),
-      BadGuyRecord('Apprentice', 2, 8, 1, 10, 1, 0, 'p climb, pain mace, banded/-3, 16 17 18 17 15 14').attack('mace', '+1 d6+2').spelllist('curelt', 'command', 'curse', 'sanctuary'),
+      BadGuyRecord('Guard (xbow)', 0, 4, 3,  1, 5, 0, 'scale/sh').ranged('lt xbow', '+0 d6+1').routine('lng sw', '+0 d8'),
+      BadGuyRecord('Guard (spear)', 0, 4, 3,  1, 5, 0, 'scale/sh').routine('spear', '+0 d6', true),
+      BadGuyRecord('Guard (pole)', 0, 4, 3,  1, 5, 0, 'mail').routine('pole', '+0 d10'),
+      BadGuyRecord('Sgt', 2,10, 0, 15, 4, 0, 'p unholy, mail/sh').routine('mstar', '+1 2d4').routine('lt xbow', '+1 d6+1'),
+      BadGuyRecord('Lt', 4,10, 3, 31, 1, 0, 'p heal, plate/sh/-1').ranged('lbow', '+3 d6/+3 d6').routine('haxe', '+3 d6+1', true),
+      BadGuyRecord('Alcolyte', 1, 8, 0,  4, 4, 0, 'p unholy, banded').routine('mace', '+1 d6+2').spelllist('curelt', 'bless', 'curse', 'command'),
+      BadGuyRecord('Lareth', 5, 8, 1, 39,-2, 0, 'imm para, +3 x2-3staff(20chg), +1plate/-4dx, 18 17 18 18 15 18').routine('staff/mace', '+6 3d6+5/+1 d4+2').spelllist('bless', 'protgood', 'command', 'curelt', 'sanctuary', 'aid', 'holdperson', 'silence15', 'resistfire', 'prayer', 'contdark'),
+      BadGuyRecord('Apprentice', 3, 8, 1, 14, 1, 0, 'p climb, turned to metal, pain mace, -3dx, 16 17 18 17 15 14').routine('mace', '+1 d6+2').spelllist('sanctuary', 'silence15', 'holdperson', 'curse', 'curelt', 'command', 'resistfire'),
 
                         // type, HD, hpbonus, hpmin, ac, special
-      MonsterRecord('War Dog', 2, 2, 10, 4, 'barding').attack('bite', '+3 2d4'),
-      MonsterRecord('Skeleton', 1, 0,  1, 7, 'imm cold/sleep/charm/hold/mental').attack('melee', '+1 d6'),
-      MonsterRecord('Zombie', 2, 0,  1, 8, 'imm cold/sleep/charm/hold/mental').attack('melee', '+2 d8'),
-      MonsterRecord('Zombie Xvart', 3, 0,  8, 8, 'electrical, imm cold/sleep/charm/hold/mental').attack('melee', '+3 d8'),
+      MonsterRecord('War Dog', 2, 2, 10, 4, 'barding').routine('bite', '+3 2d4'),
 
-      MonsterRecord('Wolf', 2, 2,  2, 7, '10').attack('bite', '+3 d4+1'),
-      MonsterRecord('Lilwere', 2, 1, 10, 3, '8 1-3sup, silv/magic').attack('bite', '+3 d4'),
-      MonsterRecord('Werewolf', 4, 3, 20, 5, '8 1-3sup, silv/magic').attack('bite', '+5 2d4'),
+      MonsterRecord('Skeleton', 1, 0,  1, 7, 'imm cold/sleep/charm/hold/mental').routine('melee', '+1 d6'),
+      MonsterRecord('Zombie', 2, 0,  1, 8, 'imm cold/sleep/charm/hold/mental').routine('melee', '+2 d8'),
+      MonsterRecord('Ghoul', 2, 0,  2, 6, 'para, imm sleep/charm').routine('c/c/b', '+2 d3/+2 d3/+2 d6'),
+      MonsterRecord('Ghast', 4, 0,  4, 4, 'stench(-2), para, imm sleep/charm/protevil').routine('c/c/b', '+4 d4/+4 d4/+4 d8'),
+      //MonsterRecord('Zombie Xvart', 3, 0,  8, 8, 'electrical, imm cold/sleep/charm/hold/mental').routine('melee', '+3 d8'),
+      //MonsterRecord('Zombling', 1, 0,  1, 8, 'leap').routine('melee', '+1 d4'),
+      //MonsterRecord('Zombie Turtle', 6, 0, 36, 2, 'imm cold/sleep/charm/hold/mental').routine('c/c/b', '+4 d6/+4 d6/+6 2d8'),
 
-      MonsterRecord('Giant Rat', 0, 0,  0, 7, '5%disease').attack('bite', '-1 d3'),
-      MonsterRecord('Giant Tick', 3, 0,  0, 3, 'blood drain').attack('bite', '+3 d4'),
-      MonsterRecord('Giant Snake', 4, 2,  0, 5, 'poison').attack('bite', '+5 d3'),
-      MonsterRecord('Giant Lizard', 3, 1,  0, 5, 'x2 on 20').attack('bite', '+4 d8'),
-      MonsterRecord('Giant Frog 6ft', 3, 0,  0, 7, '1-4sup, 30ft leap, swallow(250lb)').attack('tongue', '+7 d1').attack('bite', '+3 2d4'),
-      MonsterRecord('Giant Frog 4ft', 2, 0,  0, 7, '1-4sup, 60ft leap, swallow(150lb)').attack('tongue', '+6 d1').attack('bite', '+2 d6'),
-      MonsterRecord('Giant Frog 2ft', 1, 0,  0, 4, '1-4sup, 90ft leap, swallow(50lb)').attack('bite', '+1 d3').attack('tongue', '+5 d1'),
-      MonsterRecord('Crocodile', 3, 0,  0, 4, '1-3sup').attack('bite', '+3 2d4').attack('death roll', '+3 d12'),
-      MonsterRecord('Crocogator', 7, 0,  0, 3, '1-3sup').attack('bite', '+7 3d6').attack('death roll', '+7 2d10'),
+      MonsterRecord('G. Rat', 0, 0,  0, 7, '5%disease').routine('bite', '-1 d3'),
+      MonsterRecord('G. Tick', 3, 0,  0, 3, 'blood drain').routine('bite', '+3 d4'),
+      MonsterRecord('G. Snake', 4, 2,  0, 5, 'poison').routine('bite', '+5 d3'),
+      MonsterRecord('G. Lizard', 3, 1,  0, 5, 'x2 on 20').routine('bite', '+4 d8'),
+      MonsterRecord('G. Leech(1)', 1, 0,  0, 9, 'after hit drain 1hp, disease').routine('bite', '+1 d4'),
+      MonsterRecord('G. Leech(2)', 2, 0,  0, 9, 'after hit drain 2hp, disease').routine('bite', '+2 d6'),
+      MonsterRecord('G. Leech(3)', 3, 0,  0, 9, 'after hit drain 3hp, disease').routine('bite', '+3 d6'),
+      MonsterRecord('G. Leech(4)', 4, 0,  0, 9, 'after hit drain 4hp, disease').routine('bite', '+4 d8'),
+      MonsterRecord('G. Frog 6ft', 3, 0,  0, 7, '1-4sup, 30ft leap, swallow(250lb)').routine('tongue', '+7 d1').routine('bite', '+3 2d4'),
+      MonsterRecord('G. Frog 4ft', 2, 0,  0, 7, '1-4sup, 60ft leap, swallow(150lb)').routine('tongue', '+6 d1').routine('bite', '+2 d6'),
+      MonsterRecord('G. Frog 2ft', 1, 0,  0, 4, '1-4sup, 90ft leap, swallow(50lb)').routine('bite', '+1 d3').routine('tongue', '+5 d1'),
+      MonsterRecord('G. Gar', 8, 0,  0, 3, 'Whirlpool, nat20 swallow(5% culm drown, iflict 10hp to escape').routine('bite', '+8 2d10'),
+      MonsterRecord('Crocodile', 3, 0,  0, 4, '1-3sup').routine('bite', '+3 2d4').routine('death roll', '+3 d12'),
+      MonsterRecord('Crocogator', 7, 0,  0, 3, '1-3sup').routine('bite', '+7 3d6').routine('death roll', '+7 2d10'),
+      MonsterRecord('Babbler', 5, 0,  0, 6, '40% hide, large yellow trex humanoid').routine('c/c/b', '+5 d6/+5 d6/+5 d8'),
 
-      MonsterRecord('Ogre', 4, 1, 20, 5, '').attack('melee', '+5 d10').attack('rock', '+4 d6'),
+      MonsterRecord('Large Spider', 2, 2,  0, 6, '30ft jump, +3poison').routine('bite', '+3 d6'),
+      MonsterRecord('Huge Spider', 1, 1,  0, 6, '+2poison').routine('bite', '+2 d4'),
+      MonsterRecord('Giant Spider', 4, 4,  0, 4, 'web, poison').routine('bite', '+5 d8'),
 
-      MonsterRecord('Zombling', 1, 0,  1, 8, 'leap').attack('melee', '+1 d4'),
-      MonsterRecord('Zombie Turtle', 6, 0, 36, 2, 'imm cold/sleep/charm/hold/mental').attack('c/c/b', '+4 d6/+4 d6/+6 2d8'),
-      MonsterRecord('Ghoul', 2, 0,  2, 6, 'para, imm sleep/charm').attack('c/c/b', '+2 d3/+2 d3/+2 d6'),
+      MonsterRecord('Lizardman', 2, 1,  0, 5, '').routine('c/c/b', '+3 d2/+3 d2/+3 d8').ranged('javelin', '+3 d6').ranged('barbed darts', '+3 d3+1/+3 d3+1'),
+      MonsterRecord('Lizardman Shaman', 2, 1,  22, 5, '').routine('c/c/b', '+7 d2/+7 d2/+7 d8').spelllist('curelt', 'protgood', 'detectmagic', 'resistfire', 'augury', 'speakanimals', 'dispel'),
 
-      MonsterRecord('Gobo (sbow)', 1,-1,  2, 6, '').attack('melee', '+0 d6').attack('sbow', '+1 d4/+1 d4'),
-      MonsterRecord('Gobo (dart)', 1,-1,  2, 6, '').attack('dart', '+1 d2/+1 d2/+1 d2').attack('melee', '+0 d6'),
+      MonsterRecord('Sea Hag', 4, 0,  0, 7, '50% mr, silver/coldiron,magic to hit, imm charm,fear,sleep,fire,cold, evil eye 3/day(vs poison), true appearence(vs spells) 1/2 str for d6 turns').routine('claws', '+4 d3+3/+4 d3+3').routine('trident', '+4 d8+3'),
+      MonsterRecord('Nereid', 4, 0,  0, 10, '50% mr, kiss drowns(vs poison), spittle blinds, infatuate males(no save) try to catch 50% nereids run away').ranged('water', '+4 d4', true).ranged('spittle', '+4 d0', true),
 
-      MonsterRecord('Bogling (blow)', 0, 0,  2, 7, 'leap dart poison (+2Para) ').attack('nat', '-1 d4').attack('blowgun', '+0 d2'),
-      MonsterRecord('Bog Chief', 1, 0,  4, 5, '').attack('nat', '1 d4'),
+      MonsterRecord('Ogre', 4, 1, 20, 5, '').routine('melee', '+5 d10').ranged('rock', '+4 d6'),
 
-      MonsterRecord('Orc (xbow)', 1, 0,  2, 6, 'scale').attack('scim', '+1 d8').attack('lt xbow', '+1 d6+1'),
-      MonsterRecord('Orc (sbow)', 1, 0,  2, 6, 'scale').attack('scim', '+1 d8').attack('sbow', '+1 d6/+1 d6'),
-      MonsterRecord('Orc guard', 2, 0, 11, 4, 'banded').attack('pole', '+2 d10').attack('lt xbow', '+2 d6+1'),
-      MonsterRecord('Orc captian', 2, 0, 15, 4, 'mail/sh').attack('scim', '+2 d8+1').attack('sbow', '+2 d6/+2 d6'),
-      MonsterRecord('Orc chief', 3, 0, 18, 3, 'plate').attack('baxe', '+3 3d4+1'),
+      MonsterRecord('Bugbear (xbow)', 3, 1,  3, 5, '1-3sup, lamellar').routine('melee', '+4 2d8').ranged('hvy', '+4 d12'),
+      MonsterRecord('Bugbear leader', 4, 1, 20, 4, '1-3sup, lamellar').routine('melee', '+5 2d8+1').ranged('hvy', '+4 d12'),
+      MonsterRecord('Bugbear chief', 4, 1, 32, 3, '1-3sup, plate').routine('melee', '+4 2d8+2'),
+      MonsterRecord('Bugbear fm', 1, 1,  3, 5, '1-3sup').routine('melee', '+2 d8'),
+      MonsterRecord('Bugbear young', 0, 0,  2, 7, '1-3sup').routine('melee', '-1 d4'),
 
-      MonsterRecord('Gnoll (lbow)', 2, 0,  4, 5, 'scale').attack('zwei', '+2 2d4').attack('lbow', '+2 d6/+2 d6'),
-      MonsterRecord('Gnoll guard', 3, 0, 16, 4, 'mail').attack('pole', '+3 d10').attack('lbow', '+3 d6/+3 d6'),
-      MonsterRecord('Gnoll leader', 3, 0, 20, 5, 'scale').attack('zwei', '+3 2d4').attack('lbow', '+4 d8/+4 d8'),
-      MonsterRecord('Gnoll chief', 4, 0, 24, 3, 'mail').attack('baxe',  '+4 3d4+2'),
-      MonsterRecord('Gnoll fm', 1, 0,  2, 7, '').attack('melee', '+1 d4'),
-      MonsterRecord('Large Spider', 2, 2,  0, 6, '30ft jump, +3poison').attack('bite', '+3 d6'),
-      MonsterRecord('Huge Spider', 1, 1,  0, 6, '+2poison').attack('bite', '+2 d4'),
-      MonsterRecord('Giant Spider', 4, 4,  0, 4, 'web, poison').attack('bite', '+5 d8'),
+      MonsterRecord('Gnoll (lbow)', 2, 0,  4, 5, 'scale').routine('zwei', '+2 2d4').ranged('lbow', '+2 d6/+2 d6'),
+      MonsterRecord('Gnoll guard', 3, 0, 16, 4, 'mail').routine('pole', '+3 d10').ranged('lbow', '+3 d6/+3 d6'),
+      MonsterRecord('Gnoll leader', 3, 0, 20, 5, 'scale').routine('zwei', '+3 2d4').ranged('lbow', '+4 d8/+4 d8'),
+      MonsterRecord('Gnoll chief', 4, 0, 24, 3, 'mail').routine('baxe',  '+4 3d4+2'),
+      MonsterRecord('Gnoll fm', 1, 0,  2, 7, '').routine('melee', '+1 d4'),
 
-      MonsterRecord('Bugbear (xbow)', 3, 1,  3, 5, '1-3sup, lamellar').attack('melee', '+4 2d8').attack('hvy', '+4 d12'),
-      MonsterRecord('Bugbear leader', 4, 1, 20, 4, '1-3sup, lamellar').attack('melee', '+5 2d8+1').attack('hvy', '+4 d12'),
-      MonsterRecord('Bugbear chief', 4, 1, 32, 3, '1-3sup, plate').attack('melee', '+4 2d8+2'),
-      MonsterRecord('Bugbear fm', 1, 1,  3, 5, '1-3sup').attack('melee', '+2 d8'),
-      MonsterRecord('Bugbear young', 0, 0,  2, 7, '1-3sup').attack('melee', '-1 d4'),
+      MonsterRecord('Gobo (sbow)', 1,-1,  2, 6, '').routine('melee', '+0 d6').ranged('sbow', '+1 d4/+1 d4'),
+      MonsterRecord('Gobo (dart)', 1,-1,  2, 6, '').ranged('dart', '+1 d2/+1 d2/+1 d2').routine('melee', '+0 d6'),
 
-      MonsterRecord('Troglodyte', 2, 0,  4, 5, 'odor, chameleon').attack('bite', '+2 d4+1/+2 d3/+2 d3').attack('club', '+2 d6'),
-      MonsterRecord('Trog guard', 3, 0, 12, 5, 'odor, chameleon').attack('club', '+3 d6+1'),
-      MonsterRecord('Trog leader', 4, 0, 24, 5, 'odor, chameleon').attack('axe', '+4 d8+1'),
-      MonsterRecord('Trog chief', 6, 0, 36, 5, 'odor, chameleon').attack('axe', '+6 d8+2'),
-      MonsterRecord('Trog fm', 1, 1,  2, 5, 'odor, chameleon').attack('bite', '+2 d4+1/+2 d3/+2 d3'),
-      MonsterRecord('Trog young', 0, 0,  2, 7, 'chameleon').attack('bite', '-1 d4'),
+      MonsterRecord('Fire Mephit', 3, 1,  0, 5, "BW 15' jet(d8+1)/5'blanket(d4), 2xmagicmissle 3/day, heatmetal 1/day, 33% gate mephit, licked by flames, 4' tall, bat winged outlandish, cigar smoking").routine('claws', '+4 d3+1/+4 d3+1'),
+      MonsterRecord('Earth Mephit', 3, 2,  0, 2, "BW 15' cone(d4+50% blinded/stunned), dig earth 1/day, 33% gate mephit, stoney, 4' tall, bat winged outlandish, cigar smoking").routine('claws', '+4 d4/+4 d4'),
+      MonsterRecord('Steam Mephit', 3, 3,  0, 7, "BW 20'r steam(d3+50% stun), 40'x40' boiling rain(2d6) 1/day, contaminate water 1/day, 33% gate mephit, sweats boiling water, 4' tall, bat winged outlandish, cigar smoking").routine('claws', '+4 d4/+4 d4'),
+      MonsterRecord('Smoke Mephit', 3, 0,  0, 4, "BW 20' ball(d4+blind d2rnds), inviso 1/day, dancing lights 1/day, 33% gate mephit, emits smoke, 4' tall, bat winged outlandish, cigar smoking").routine('claws', '+3 d2/+3 d2'),
+      MonsterRecord('Lava Mephit', 3, 0,  0, 6, "BW 10' ball(d6), shape change into lava pool, regen 2hp in lava, 33% gate mephit, licked by flames, 4' tall, bat winged outlandish, cigar smoking").routine('claws', '+3 d8+1/+3 d8+1'),
+
+      MonsterRecord('Bogling (blow)', 0, 0,  2, 7, 'leap dart poison (+2Para) ').routine('fists', '-1 d4').ranged('blowgun', '+0 d2'),
+      MonsterRecord('Bog Chief', 1, 0,  4, 5, '').routine('nat', '1 d4'),
+
+      MonsterRecord('Wolf', 2, 2,  2, 7, '10').routine('bite', '+3 d4+1'),
+      //MonsterRecord('Lilwere', 2, 1, 10, 3, '8 1-3sup, silv/magic').routine('bite', '+3 d4'),
+      MonsterRecord('Werewolf', 4, 3, 20, 5, '8 1-3sup, silv/magic').routine('bite', '+5 2d4'),
+
+      MonsterRecord('Orc (xbow)', 1, 0,  2, 6, 'scale').routine('scim', '+1 d8').ranged('lt xbow', '+1 d6+1'),
+      MonsterRecord('Orc (sbow)', 1, 0,  2, 6, 'scale').routine('scim', '+1 d8').ranged('sbow', '+1 d6/+1 d6'),
+      MonsterRecord('Orc guard', 2, 0, 11, 4, 'banded').routine('pole', '+2 d10').ranged('lt xbow', '+2 d6+1'),
+      MonsterRecord('Orc captian', 2, 0, 15, 4, 'mail/sh').routine('scim', '+2 d8+1').ranged('sbow', '+2 d6/+2 d6'),
+      MonsterRecord('Orc chief', 3, 0, 18, 3, 'plate').routine('baxe', '+3 3d4+1'),
+
+      MonsterRecord('Troglodyte', 2, 0,  4, 5, 'odor, chameleon').routine('b/c/c', '+2 d4+1/+2 d3/+2 d3').routine('club', '+2 d6', true),
+      MonsterRecord('Trog guard', 3, 0, 12, 5, 'odor, chameleon').routine('club', '+3 d6+1', true),
+      MonsterRecord('Trog leader', 4, 0, 24, 5, 'odor, chameleon').routine('axe', '+4 d8+1', true),
+      MonsterRecord('Trog chief', 6, 0, 36, 5, 'odor, chameleon').routine('axe', '+6 d8+2', true),
+      MonsterRecord('Trog fm', 1, 1,  2, 5, 'odor, chameleon').routine('b/c/c', '+2 d4+1/+2 d3/+2 d3'),
+      MonsterRecord('Trog young', 0, 0,  2, 7, 'chameleon').routine('bite', '-1 d4'),
       ],
     }
   }();
@@ -440,7 +483,8 @@ rpgpad.MonsterManual = function() {
 rpgpad.melee_count = 0; // Global!
 
 rpgpad.new_melee = function() {
-  // A Melee is group of mobs and player characters, grouped cause they attack each other.
+  // A Melee is group of mobs and player characters, grouped cause they attack
+  // each other.
   function MeleeHeader() {
     // Melee title and list of participating characters
     var mything = new Ext.Container({
@@ -449,7 +493,7 @@ rpgpad.new_melee = function() {
       layout: { type: 'hbox', pack: 'start', align: 'center' },
       items: [ { xtype: 'component', flex:1 }, ],
       // Attributes
-      _title: 'Melee' + rpgpad.melee_count,
+      _title: 'Battle' + rpgpad.melee_count,
       _characters: [],
       // Methods
       update_text: function() {
@@ -476,57 +520,57 @@ rpgpad.new_melee = function() {
 
   function MobList() {
     return new Ext.Container({
-      title: 'monsters'+rpgpad.melee_count,
-      itemId: 'b_monsters',
-      cls: 'monster_list',
+      title: 'mobs' + rpgpad.melee_count,
+      itemId: 'm_mobs',
+      cls: 'mob_list',
       layout: { type: 'vbox', align: 'stretch' },
       })
     };
 
-  function Monster(mm) {
-    // instance of a Mob
+  function Mob(mm) {
+    // instance of a Mob, mm is mob record from monstermanual
     function mynameis() { return '#' + mm.count + ' ' + mm.type; };
     mm.count += 1;
     var hitpoints = mm.calc_hp();
-    var monster = new Ext.Toolbar({
+    var mob = new Ext.Toolbar({
       name: mynameis(),
       mm: mm,
       xp: mm.calc_xp(hitpoints),
       spells: mm.calc_spells(),
       loot: mm.calc_loot(),
-      cls: 'monster',
+      cls: 'mob',
       height: 60,
       layout: { type: 'hbox', pack: 'justify', align : 'center' },
       defaults: {ui:'small', centered:true, },
       items: [
         { text: mynameis(), badgeText: mm.hitdice, width:120, padding: '10 0 10 0', handler: function(button, e) {
-          monster.toggle_selection();
+          mob.toggle_selection();
           },
         },
         { itemId:'m_attack', width:120, padding:10, handler: function(button, e) {
-          monster.do_attack();
+          mob.do_attack();
           },
         },
         { xtype:'spacer' },
         { text: 'Action', itemId:'m_action', padding:10, handler: function(button, e) {
-          action_overlay.funkyMcFunkStein([monster]);
+          mob._melee.action_overlay.show_action([mob]);
           },
         },
         { xtype:'component', html:'AC '+ mm.ac, cls:'m_ac', margin:5 },
         { iconMask: true, iconCls: 'add', ui:'plain', padding:'17 5 0 15', centered:true, handler: function(button, e) {
-          monster.hitpoints(1);
+          mob.hitpoints(1);
           },
         },
         { xtype:'textfield', itemId:'hitpoints', width:30, padding:0, centered:true, value:hitpoints, },
         { iconMask: true, iconCls: '/minus.png', ui:'plain', padding:'17 15 0 5', handler: function(button, e) {
-          monster.hitpoints(-1);
+          mob.hitpoints(-1);
           },
         },
         { xtype:'spacer' },
         { xtype:'textfield', name:'special', value: mm.special },
         ]
       });
-    monster.toggle_selection = function(on) {
+    mob.toggle_selection = function(on) {
       if (on == true) { this.selected = false }
       if (on == false) { this.selected = true }
       if (this.selected) {
@@ -538,8 +582,8 @@ rpgpad.new_melee = function() {
         this.selected = true;
         }
       };
-    monster.hitpoints = function(delta) {
-      // modify and return monster's hitpoints
+    mob.hitpoints = function(delta) {
+      // modify and return mob's hitpoints
       var control = this.getComponent('hitpoints');
       var hitpoints = parseInt(control.getValue()) + delta;
       control.setValue(hitpoints);
@@ -548,20 +592,20 @@ rpgpad.new_melee = function() {
         };
       return hitpoints;
       };
-    monster.dead = function() {
-      // mark monster as dead
+    mob.dead = function() {
+      // mark mob as dead
       rpgpad.KillTab.record_death(this.name, this.mm.type, this.xp);
-      melee.remove_monster(this);
+      this._melee.remove_mob(this);
       return this;
       };
-    monster.captured = function() {
-      // mark monster as captured
+    mob.captured = function() {
+      // mark mob as captured
       rpgpad.KillTab.record_capture(this.name, this.mm.type, this.xp);
-      melee.remove_monster(this);
+      this._melee.remove_mob(this);
       return this;
       };
-    monster.incapacitate = function(rounds) {
-      // mark monster as incapacitated
+    mob.incapacitate = function(rounds) {
+      // mark mob as incapacitated
       this.incapacitated = true;
       this.addCls('incapacitated');
       this.getComponent('m_attack').setDisabled(true);
@@ -571,8 +615,8 @@ rpgpad.new_melee = function() {
         }
       return this;
       };
-    monster.revive = function() {
-      // mark monster as no longer incapacitated
+    mob.revive = function() {
+      // mark mob as no longer incapacitated
       this.incapacitated = false;
       this.removeCls('incapacitated');
       this.getComponent('m_attack').setDisabled(false);
@@ -581,24 +625,57 @@ rpgpad.new_melee = function() {
         }
       return this;
       };
-    monster.do_attack = function() {
-      // one monster's full attacks no target, pops up overlay
+    mob.get_attacks = function() {
+      // return current attack routines/multi attacks.
+      var attacks = [];
+      if (this.attack.multi) {
+        // already split into multiple attacks
+        attacks = this.attack.attacks;
+      } else if (this.attack.ranged) {
+        // split into multiple attacks
+        Ext.each(this.attack.attacks, function(a) {
+          attacks.push({type: this.attack.type, ranged: true, multi: true, text: a.text, attacks: a});
+          }, this);
+      } else {
+        attacks.push(this.attack);
+        }
+      return attacks;
+      };
+    mob.resolve_attacks = function(next_target, any_target, format) {
+      // Resolve all attacks mob.
+      var result = '';
+      Ext.each(this.get_attacks(), function(routine) {
+        if (routine.multi) {
+          target = any_target(mob);
+        } else {
+          target = next_target(mob);
+          }
+        Ext.each(routine['attacks'], function(attack) {
+          result += format(mob, this.attack_html(this.roll_attack(attack), target));
+          }, this);
+        }, this);
+      return result
+      };
+    mob.do_attack = function() {
+      // one mob's full attacks, no target, pops up overlay.
       var html, result;
       html = '<div align="center"><h3>' + this.name + '</h3>' + 'HD: ' + mm.HD + ' "' + this.attack['text'] + '"<br /><br /></div>';
-      Ext.each(this.attack['attacks'], function(attack) {
-        result = this.attack_html(this.roll_attack(attack), {ac:10});
-        rpgpad.console.log('"' + this.name + '" Attack: ' + result);
-        html += '<h3>' + result + '</h3></div>'
-        });
-      attack_overlay.my_show(html, this);
+      Ext.each(this.get_attacks(), function(routine) {
+        Ext.each(routine['attacks'], function(attack) {
+          result = this.attack_html(this.roll_attack(attack), {ac:10});
+          rpgpad.console.log('"' + this.name + '" Attack: ' + result);
+          html += '<h3>' + result + '</h3></div>'
+          }, this);
+        }, this);
+      this._melee.attack_overlay.my_show(html, this);
       };
-    monster.roll_saves = function() {
-      // Roll all saves
+    mob.roll_saves = function() {
+      // Roll all saves.
       var roll = rpgpad.dice(1, 20);
       return {roll: roll, aimed: roll-mm.saves[0], bw: roll-mm.saves[1], dpp: roll-mm.saves[2], pp: roll-mm.saves[3], spell: roll-mm.saves[4]};
       };
-    monster.roll_attack = function(attack) {
-      // Roll one attack of an attack routine
+    mob.roll_attack = function(attack) {
+      // Roll one attack of an attack routine.
       if (this.incapacitated == true) {
         return { roll:0, hitac:'incapacitated', attack:0, damage:0 };
         }
@@ -611,8 +688,8 @@ rpgpad.new_melee = function() {
         type: attack.type,
         }
       };
-    monster.attack_html = function(r, target) {
-      // r is monster.roll_attack result
+    mob.attack_html = function(r, target) {
+      // r is mob.roll_attack result
       if (r.hitac == 'incapacitated') {
         return '(-) Incapacitated!'
       } else {
@@ -632,70 +709,139 @@ rpgpad.new_melee = function() {
           }
         }
       };
-    monster.switch_attack = function(attack) {
-      // switch between available attack routines
+    mob.switch_attack = function(attack) {
+      // Switch between available attack options.
       this.attack = attack;
       var control = this.getComponent('m_attack');
       control.setText(attack['text']);
       control.setBadge(attack['type']);
       control.doComponentLayout();
       };
-    monster.switch_attack(mm.attacks[0]);
-    return monster;
+    mob.switch_attack(mm.attack_options[0]);
+    return mob;
     };
 
-  var melee, characters, monsters, selector, action_overlay, spell_overlay, attack_overlay;
+  var attack_overlay = new Ext.Panel({
+    modal: true,
+    floating: true,
+    centered: true,
+    styleHtmlContent: true,
+    cls: 'attack_overlay',
+    dockedItems: [
+      new Ext.Toolbar({
+        dock : 'bottom',
+        height: 54,
+        layout: { type:'hbox', align: 'stretch', pack: 'justify' },
+        defaults: {margin: 6, },
+        items: [],
+        }),
+      ],
+    my_show: function(html, mob) {
+      function add_option(who, what, attack) {
+        return {
+          text: what + ' ' + attack['text'], handler: function(button, e) {
+            attack_overlay.hide();
+            mob.switch_attack(attack);
+            mob.do_attack();
+            },
+          };
+        };
+      var bob = this.getDockedItems()[0];
+      bob.removeAll(true);
+      Ext.each(mob.mm.attack_options, function(option) {
+        if (option != mob.attack) {
+          bob.add(add_option(mob, option['type'], option));
+          }
+        });
+      bob.doLayout();
+      this.update(html);
+      this.show();
+      this.doComponentLayout();
+      },
+    });
 
-  action_overlay = new Ext.Panel({
+  var multi_attack_overlay = new Ext.Panel({
+    modal: true,
+    floating: true,
+    centered: true,
+    styleHtmlContent: true,
+    cls: 'multi_attack_overlay',
+    my_show: function(html) {
+      this.update(html);
+      this.show();
+      this.doComponentLayout();
+      },
+    });
+
+  var action_overlay = new Ext.Panel({
     modal: true,
     floating: true,
     centered: true,
     cls: 'action_overlay',
     width: 400,
     layout: { type: 'vbox', align: 'stretch' },
-    defaults: {xtype:'button', margin:6, cls: 'bigbutton', centered:true, flex:1 },
+    defaults: {xtype:'button', margin:'6 10 6 10', cls: 'bigbutton', centered:true, flex:1, },
     items: [
-      { xtype: 'component', styleHtmlContent: true, },
-      { text: 'To Dead Pile', ui:'decline', handler: function(button, e) { Ext.each(action_overlay._monsters, function(m) { m.dead() }); action_overlay.hide(); }, },
-      { text: 'To Captured', ui:'decline', handler: function(button, e) { Ext.each(action_overlay._monsters, function(m) { m.captured() }); action_overlay.hide(); }, },
-      { text: 'Remove', ui: 'decline', margin:10, handler: function(button, e) {
-        Ext.each(action_overlay._monsters, function(m) { melee.remove_monster(m) });
-        melee.doComponentLayout();
-        action_overlay.hide();
-        },
-      },
-      { text: 'Revive', margin: '10 3 3 3', handler: function(button, e) { Ext.each(action_overlay._monsters, function(m) { m.revive() }); action_overlay.hide(); }, },
-      { text: 'Incapacitate', margin: '3 3 10 3', handler: function(button, e) { Ext.each(action_overlay._monsters, function(m) { m.incapacitate() }); action_overlay.hide(); }, },
+      { xtype: 'component', itemId:'a_header', styleHtmlContent: true, },
+      { text: 'Revive', handler: function(button, e) { Ext.each(action_overlay._mobs, function(m) { m.revive() }); action_overlay.hide(); }, },
+      { text: 'Incapacitate', margin: '3 10 10 10', handler: function(button, e) { Ext.each(action_overlay._mobs, function(m) { m.incapacitate() }); action_overlay.hide(); }, },
       { text: 'Aimed Save', ui:'confirm', handler: function(button, e) { action_overlay.show_save('Rod/Wand/Staff', 'aimed') } },
       { text: 'Breath Save', ui:'confirm', handler: function(button, e) { action_overlay.show_save('Breath Weapon', 'bw') } },
       { text: 'Death/Para/Poison', ui:'confirm', handler: function(button, e) { action_overlay.show_save('Death/Paralysis/Poison', 'dpp') } },
       { text: 'Petri/Poly Save', ui:'confirm', handler: function(button, e) { action_overlay.show_save('Petrification/Polymorph', 'pp') } },
       { text: 'Spell Save', ui:'confirm', handler: function(button, e) { action_overlay.show_save('Spell', 'spell') } },
-      { text: 'Spells', itemId:'a_spells', margin: '10 3 3 3', handler: function(button, e) {
+      { text: 'Spells', itemId:'a_spells', margin: '10', handler: function(button, e) {
         action_overlay.hide();
-        spell_overlay.my_show(action_overlay._monsters[0]);
+        spell_overlay.my_show(action_overlay._mobs[0]);
+        },
+      },
+      { text: 'To Dead Pile', ui:'decline', handler: function(button, e) { Ext.each(action_overlay._mobs, function(m) { m.dead() }); action_overlay.hide(); }, },
+      { text: 'To Captured', ui:'decline', handler: function(button, e) { Ext.each(action_overlay._mobs, function(m) { m.captured() }); action_overlay.hide(); }, },
+      { text: 'Remove', ui: 'decline', margin: '10', handler: function(button, e) {
+        Ext.each(action_overlay._mobs, function(m) { melee.remove_mob(m) });
+        melee.doComponentLayout();
+        action_overlay.hide();
         },
       },
       ],
     });
-  action_overlay.funkyMcFunkStein = function(monsters) {
-    this._monsters = monsters;
-    if (this._monsters.length > 0) {
-      var header = this.items.getAt(0);
-      var html = this._monsters.length + ': ';
-      Ext.each(this._monsters, function(m) { html += m.name + ', ' });
+  action_overlay.show_action = function(mobs) {
+    // Display Action picker for multiple mobs.
+    this._mobs = mobs;
+    if (this._mobs.length > 0) {
+      for (var i=this.items.length;i > 12; i--) {
+        this.remove(i-1);
+        }
+      Ext.each(rpgpad.Combat.get_melees(), function(m) {
+        if (m.title != melee.title) {
+          this.add({
+            text: 'To ' + m.title,
+            xtype:'button', margin: 10, cls: 'bigbutton', centered:true, flex:1,
+            scope: this,
+            handler: function(button, e) {
+              Ext.each(this._mobs, function(mob) {
+                melee.move_mob(mob, m);
+                }, this);
+              this.hide();
+              },
+            });
+          }
+        }, this);
+      var header = this.getComponent('a_header');
+      var html = this._mobs.length + ': ';
+      Ext.each(this._mobs, function(m) { html += m.name + ', ' });
       header.update(html);
-      header.doComponentLayout();
-      this.getComponent('a_spells').setDisabled(this._monsters.length != 1 || this._monsters[0].spells.length == 0);
+      this.getComponent('a_spells').setDisabled(this._mobs.length != 1 || this._mobs[0].spells.length == 0);
       this.doLayout();
       this.show();
       }
-    }
+    };
   action_overlay.show_save = function(name, save) {
+    // Show save results for multiple mobs.
     var saves, roll, val, msg;
     var saved = [], failed = [];
     var html = '<h2>Save vs ' + name + '</h2>';
-    Ext.each(this._monsters, function(m) {
+    Ext.each(this._mobs, function(m) {
       saves = m.roll_saves();
       roll = saves['roll'];
       val = saves[save];
@@ -714,9 +860,9 @@ rpgpad.new_melee = function() {
       });
     this.hide();
     saves_overlay.my_show(html, saved, failed)
-    }
+    };
 
-  spell_overlay = new Ext.Panel({
+  var spell_overlay = new Ext.Panel({
     modal: true,
     floating: true,
     centered: true,
@@ -725,26 +871,26 @@ rpgpad.new_melee = function() {
     layout: { type: 'vbox', align: 'stretch' },
     defaults: { xtype:'button', margin:6, cls: 'bigbutton', centered:true, flex:1,
       handler: function(button, e) {
-        var spell = spell_overlay._monster.spells[button.spelldex];
-        spell.cast(spell_overlay._monster.name);
+        var spell = spell_overlay._mob.spells[button.spelldex];
+        spell.cast(spell_overlay._mob.name);
         spell_overlay.hide();
         },
       },
     items: [
       ],
-    my_show: function(monster) {
-      this._monster = monster;
+    my_show: function(mob) {
+      this._mob = mob;
       this.removeAll();
-      for (var i=0; i < this._monster.spells.length; i++) {
-        var spell = this._monster.spells[i];
-        spell_overlay.add({text: spell.name + ' (' + spell.segments + ')', spelldex: i, disabled: spell.casted == true});
+      for (var i=0; i < this._mob.spells.length; i++) {
+        var spell = this._mob.spells[i];
+        this.add({text: spell.name + ' (' + spell.segments + ')', spelldex: i, disabled: spell.casted == true});
         };
       this.show();
       this.doLayout();
       },
     });
 
-  saves_overlay = new Ext.Panel({
+  var saves_overlay = new Ext.Panel({
     modal: true,
     floating: true,
     centered: true,
@@ -790,61 +936,9 @@ rpgpad.new_melee = function() {
       },
     });
 
-  attack_overlay = new Ext.Panel({
-    modal: true,
-    floating: true,
-    centered: true,
-    styleHtmlContent: true,
-    cls: 'attack_overlay',
-    dockedItems: [
-      new Ext.Toolbar({
-        dock : 'bottom',
-        height: 54,
-        layout: { type:'hbox', align: 'stretch', pack: 'justify' },
-        defaults: {margin: 6, },
-        items: [],
-        }),
-      ],
-    my_show: function(html, monster) {
-      function add_option(who, what, attack) {
-        return {
-          text: what + ' ' + attack['text'], handler: function(button, e) {
-            attack_overlay.hide();
-            monster.switch_attack(attack);
-            monster.do_attack();
-            },
-          };
-        };
-      var bob = this.getDockedItems()[0];
-      bob.removeAll(true);
-      Ext.each(monster.mm.attacks, function(option) {
-        if (option != monster.attack) {
-          bob.add(add_option(monster, option['type'], option));
-          }
-        });
-      bob.doLayout();
-      this.update(html);
-      this.show();
-      this.doComponentLayout();
-      },
-    });
-
-  multi_attack_overlay = new Ext.Panel({
-    modal: true,
-    floating: true,
-    centered: true,
-    styleHtmlContent: true,
-    cls: 'multi_attack_overlay',
-    my_show: function(html) {
-      this.update(html);
-      this.show();
-      this.doComponentLayout();
-      },
-    });
-
   rpgpad.melee_count += 1
-  melee = new Ext.Panel({
-    title: 'Melee' + rpgpad.melee_count,
+  var melee = new Ext.Panel({
+    title: 'Battle' + rpgpad.melee_count,
     cls: 'melee',
     layout: { type: 'vbox', align: 'stretch' },
     items: [ MeleeHeader(), MobList() ],
@@ -856,13 +950,14 @@ rpgpad.new_melee = function() {
         defaults: { margin: 6, },
         items: [
           { text: 'New', ui: 'confirm', handler: function(button, e) {
-            rpgpad.Combat.add(rpgpad.new_melee());
+            var new_melee = rpgpad.new_melee()
+            rpgpad.console.log('<b>' + new_melee.title + ' started.</b>');
+            rpgpad.Combat.add(new_melee);
             rpgpad.Combat.doLayout();
-            rpgpad.console.log('<b>' + melee.title + ' started.</b>');
             },
           },
           { text: 'End', ui: 'decline', handler: function(button, e) {
-            if (rpgpad.Combat.items.getCount() == 1 && melee.getComponent('b_monsters').items.getCount() == 0) {
+            if (rpgpad.Combat.items.getCount() == 1 && melee.getComponent('m_mobs').items.getCount() == 0) {
               return;
               }
             rpgpad.console.log('<b>' + melee.title + ' ended.</b>');
@@ -878,16 +973,16 @@ rpgpad.new_melee = function() {
           { xtype:'spacer' },
 
           new Ext.form.Select({
-            id: 'select_monster',
-            name: 'monster',
+            id: 'select_mob',
+            name: 'mob',
             modal: true,
             width: 140,
             centered: true,
             options: rpgpad.MonsterManual.selectbox_list(),
           }),
           { iconMask: true, ui: 'plain', margin:'5 0 0 0', iconCls: 'add', handler: function(button, e) {
-            selector = button.previousSibling();
-            melee.add_monster(Monster(selector.getValue()));
+            var selector = button.previousSibling();
+            melee.add_mob(Mob(selector.getValue()));
             },
           },
           { xtype:'spacer' },
@@ -904,17 +999,17 @@ rpgpad.new_melee = function() {
           },
 
           { text: 'Random', handler: function(button, e) {
-            monsters = melee.getComponent('b_monsters').items;
-            var length = monsters.getCount()
+            var mobs = melee.getComponent('m_mobs').items;
+            var length = mobs.getCount()
             var count = button.previousSibling().getValue();
             melee.clear_selected();
             if (count >= length) {
-              monsters.each(function(m) { m.toggle_selection(true) });
+              mobs.each(function(m) { m.toggle_selection(true) });
               }
             else {
               var pick, these=new Array();
               for (var i=0; i < length; i++) {
-                these[i] = monsters.getAt(i);
+                these[i] = mobs.getAt(i);
                 }
               for (var i=count; i > 0; i--) {
                 pick = rpgpad.randint(0, these.length-1);
@@ -922,98 +1017,31 @@ rpgpad.new_melee = function() {
                 these.remove(these[pick]);
                 }
               }
-            action_overlay.funkyMcFunkStein(melee.get_selected());
+            melee.action_overlay.show_action(melee.get_selected());
             },
           },
           { xtype:'spacer' },
 
           { text: 'Selected', handler: function(button, e) {
-            action_overlay.funkyMcFunkStein(melee.get_selected());
+            melee.action_overlay.show_action(melee.get_selected());
             },
           },
           { xtype:'spacer' },
-          { text: 'Attack', handler: function(button, e) {
-            // evenly distribute attacks
-            function fill_pool() {
-              cpool = [];
-              Ext.each(characters, function(c) { cpool.push(c); });
-              }
-            function pick_character() {
-              if (cpool.length == 0) { fill_pool() };
-              var c = cpool[rpgpad.randint(0, cpool.length-1)];
-              cpool.remove(c);
-              return c
-              }
-            var html, monsters, characters, cpool=[];
-            monsters = melee.get_active();
-            characters = melee.get_characters();
-            html = '<h2>' + melee.title + '</h2>';
-            if (monsters.length == 0)  {
-              html += 'Add some bad guys to melee.';
-              }
-            else if (characters.length == 0)  {
-              html += 'Add some characters to melee.';
-              }
-            else {
-              Ext.each(monsters, function(m) {
-                html += melee.resolve_attack_routine(m, pick_character());
-                });
-              }
-            multi_attack_overlay.my_show(html);
+          { text: 'Ranged', handler: function(button, e) {
+            var html = '<h2>' + melee.title + ' Ranged</h2>';
+            html += melee.do_full_attack(melee.get_active_ranged());
+            melee.multi_attack_overlay.my_show(html);
+            },
+          },
+          { text: 'Melee', handler: function(button, e) {
+            var html = '<h2>' + melee.title + '</h2>';
+            html += melee.do_full_attack(melee.get_active_melee());
+            melee.multi_attack_overlay.my_show(html);
             },
           },
           ]
         }),
       ],
-    // Melee Container Methods
-    resolve_attack_routine: function(monster, character) {
-      var html = '', result;
-      Ext.each(monster.attack['attacks'], function(attack) {
-        result = monster.attack_html(monster.roll_attack(attack), character);
-        rpgpad.console.log('"' + monster.name + '" Attack: ' + result);
-        html += '<h3>' + monster.name + ': ' + result + '</h3>'
-        });
-      return html;
-      },
-    add_monster: function(monster) {
-      monsters = melee.getComponent('b_monsters');
-      monsters.add(monster);
-      monsters.doLayout();
-      rpgpad.Combat.doLayout();
-      rpgpad.console.log('"' + monster.name + '" Added.');
-      return monster;
-      },
-    remove_monster: function(monster) {
-      monsters = melee.getComponent('b_monsters');
-      monsters.remove(monster);
-      monsters.doLayout();
-      rpgpad.Combat.doLayout();
-      rpgpad.console.log('"' + monster.name + '" Removed.');
-      return monster;
-      },
-    random_monster: function(monster) {
-      monsters = melee.getComponent('b_monsters').items;
-      var count = monsters.getCount()
-      if (count > 0) {
-        return monsters.getAt(rpgpad.dice(1, count) - 1);
-        }
-      },
-    get_active: function() {
-      var monster_list = [];
-      monsters = melee.getComponent('b_monsters').items;
-      monsters.each(function(m) { if (m.incapacitated != true) { monster_list.push(m)} });
-      return monster_list;
-      },
-    get_selected: function() {
-      var monster_list = [];
-      monsters = melee.getComponent('b_monsters').items;
-      monsters.each(function(m) { if (m.selected) { monster_list.push(m)} });
-      return monster_list;
-      },
-    clear_selected: function() {
-      monsters = melee.getComponent('b_monsters').items;
-      monsters.each(function(m) { m.toggle_selection(false) });
-      },
     add_character: function(pc) {
       this.getComponent('b_characters').add_character(pc);
       },
@@ -1023,7 +1051,108 @@ rpgpad.new_melee = function() {
     get_characters: function(pc) {
       return this.getComponent('b_characters').get_characters();
       },
+    add_mob: function(mob) {
+      rpgpad.console.log('"' + mob.name + '" Added to ' + this.title);
+      mob._melee = this;
+      var mobs = this.getComponent('m_mobs');
+      mobs.add(mob);
+      mobs.doLayout();
+      rpgpad.Combat.doLayout();
+      return mob;
+      },
+    remove_mob: function(mob) {
+      rpgpad.console.log('"' + mob.name + '" Removed from ' + this.title);
+      var mobs = this.getComponent('m_mobs');
+      mobs.remove(mob);
+      mobs.doLayout();
+      rpgpad.Combat.doLayout();
+      return mob;
+      },
+    move_mob: function(mob, new_home) {
+      rpgpad.console.log('"' + mob.name + '" moved from ' + this.title + ' to ' + new_home.title);
+      var mobs = this.getComponent('m_mobs');
+      var nobs = new_home.getComponent('m_mobs');
+      mobs.remove(mob, false);
+      nobs.add(mob);
+      mob._melee = new_home;
+      mobs.doLayout();
+      nobs.doLayout();
+      rpgpad.Combat.doLayout();
+      return mob;
+      },
+    random_mob: function(mob) {
+      var mobs = this.getComponent('m_mobs').items;
+      var count = mobs.getCount()
+      if (count > 0) {
+        return mobs.getAt(rpgpad.dice(1, count) - 1);
+        }
+      },
+    get_active: function() {
+      var mob_list = [];
+      var mobs = this.getComponent('m_mobs').items;
+      mobs.each(function(m) { if (m.incapacitated != true) {mob_list.push(m);} });
+      return mob_list;
+      },
+    get_active_melee: function() {
+      var mob_list = [];
+      var mobs = this.getComponent('m_mobs').items;
+      mobs.each(function(m) { if (m.incapacitated != true && m.attack.melee == true) {mob_list.push(m);} });
+      return mob_list;
+      },
+    get_active_ranged: function() {
+      var mob_list = [];
+      var mobs = this.getComponent('m_mobs').items;
+      mobs.each(function(m) { if (m.incapacitated != true && m.attack.ranged == true) {mob_list.push(m);} });
+      return mob_list;
+      },
+    get_selected: function() {
+      var mob_list = [];
+      var mobs = this.getComponent('m_mobs').items;
+      mobs.each(function(m) { if (m.selected) { mob_list.push(m)} });
+      return mob_list;
+      },
+    clear_selected: function() {
+      var mobs = this.getComponent('m_mobs').items;
+      mobs.each(function(m) { m.toggle_selection(false) });
+      },
+    do_full_attack: function(mobs) {
+      function fill_pool(pool) {
+        pool.length = 0;
+        Ext.each(pcs, function(c) { pool.push(c); });
+        return pool;
+        }
+      function any_target(mob, any) {
+        // Grab target from all characters, no distribution.
+        return pcs[rpgpad.randint(0, pcs.length-1)];
+        }
+      function next_target(mob, any) {
+        // Evenly distribute routines across targets.
+        if (cpool.length == 0) { fill_pool(cpool) };
+        var c = cpool[rpgpad.randint(0, cpool.length-1)];
+        cpool.remove(c);
+        return c;
+        }
+      function format_results(mob, result) {
+        rpgpad.console.log('"' + mob.name + '" Attack: ' + result);
+        return '<h3>' + mob.name + ': ' + result + '</h3>'
+        }
+      var pcs, html='', cpool=[];
+      pcs = this.get_characters();
+      if (pcs.length == 0)  {
+        html += 'Move some characters into melee.';
+      } else if (mobs.length == 0)  {
+        html += 'No bad guys can attack.';
+      } else {
+        Ext.each(mobs, function(m) {
+          html += m.resolve_attacks(next_target, any_target, format_results);
+          });
+        }
+      return html;
+      },
     });
+  melee.action_overlay = action_overlay;
+  melee.attack_overlay = attack_overlay;
+  melee.multi_attack_overlay = multi_attack_overlay;
   return melee;
   };
 
@@ -1129,7 +1258,7 @@ rpgpad.Bullpen = function() {
       var dock = this.getDockedItems()[0];
       dock.removeAll()
       Ext.each(rpgpad.Combat.get_melees(), function(b) {
-        dock.add( { text: 'To '+b.title, handler: function(button, e) {
+        dock.add( { text: 'To ' + b.title, handler: function(button, e) {
             character_edit_overlay.hide();
             b.add_character(character_edit_overlay.pc);
             },

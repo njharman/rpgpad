@@ -19,19 +19,21 @@ __ http://www.sencha.com/products/touch/
 TODO
 ====
 
-    - Refactor buttugly code/structure into something not so embarrasing.
-    - Bug fixes, which implies unittests.
-    - Local storage of unique monsters' state.
+    - BUG Spells casted are per type not per instance
+    - More Refactor buttugly code/structure into something not so embarrasing.
     - Better/complete offline storage, offline work.
+    - Distinguish betwen AC and nodex/noshield AC.
+    - Temp tohit/damage/save mods, (like from bless)
     - Upload data to server/email.
     - Add loot to monsters.
     - Record Loot.
     - Monster manual, spells import from url.
+    - Local storage of unique monsters' state.
     - Treasure generation.
     - Random encounters.
+    - Magic Resistance.
     - "Encounter" & "rooms". Group of monsters and loot together.
     - Finish and integrate my Tablesmith_ table processing js lib.
-    - Attack routines(1 target), vs multiple attacks(multiple targets).
     - Improve performance of action screen.
     - Time tracking.
     - Make "rules system" modular so can make |LL|_ and |SW|_ modules.
