@@ -1,4 +1,7 @@
 /* vim: set expandtab tabstop=2 shiftwidth=2: */
+// Norman J. Harman Jr. njharman@gmail.com
+
+
 String.prototype.contains = function(it) { return this.indexOf(it) != -1; };
 
 if (typeof Object.create !== 'function') {
@@ -8,6 +11,7 @@ if (typeof Object.create !== 'function') {
     return new F();
     };
   }
+
 if (typeof Object.spawn !== 'function') {
   Object.spawn = function (parent, props) {
     var defs = {}, key;
@@ -19,6 +23,7 @@ if (typeof Object.spawn !== 'function') {
     return Object.create(parent, defs);
     }
   }
+
 
 Ext.regModel('PC', {
   fields: [
@@ -153,50 +158,52 @@ rpgpad.xp_table = [
   ];
 
 
-rpgpad.randint = function(start, end) {
-  return start + Math.floor(Math.random()*(end+1));
+rpgpad.randint = function(min, max) {
+  // Return random integer between min and max inclusive.
+  return min + Math.floor(Math.random() * max);
   }
 
-rpgpad.dice = function(count, sides) {
-  // roll count x sided dice.
-  var roll, total = 0;
+rpgpad.roll_dice = function(count, sides, mod) {
+  // Return total of rolling count dice with x sides.
+  var roll, rolls=[], modtxt='', total = 0;
   for (var i=count; i>0; i--) {
-    roll = 1 + Math.floor(Math.random()*sides);
-    total += roll
-    rpgpad.console.log('d' + sides + ': ' + roll);
+    roll = rpgpad.randint(1, sides);
+    total += roll;
+    rolls.push(roll);
     }
-  return total
+  if (mod != undefined && mod != 0) {
+    total += mod;
+    modtxt = (mod > 0 ? '+' : '-') + mod;
+    }
+  rpgpad.console.log('Roll ' + count + 'd' + sides + modtxt + ': (' + rolls.join(',') + ') = ' + total);
+  return total;
   }
 
-rpgpad.roll = function(roll) {
-  // parse and roll "2d6+2" formated strings.
-  var more, die, mod, total, stuff, count;
-  stuff = roll.split('d');
-  if (!stuff[0]) { count = 1 }
-  else { count = parseInt(stuff[0]) }
-  if (stuff[1].contains('+')) {
-    more = stuff[1].split('+');
+rpgpad.parse_roll = function(roll) {
+  // Parse "2d6+2" formated strings, return function that returns roll.
+  var more, die, mod, total, bits, count;
+  bits = roll.split('d');
+  count = !bits[0] ? 1 : parseInt(bits[0]);
+  if (bits[1].contains('+')) {
+    more = bits[1].split('+');
     die = parseInt(more[0]);
     mod = parseInt(more[1]);
-    }
-  else if (stuff[1].contains('-')) {
-    more = stuff[1].split('-');
+  } else if (bits[1].contains('-')) {
+    more = bits[1].split('-');
     die = parseInt(more[0]);
     mod = -parseInt(more[1]);
-    }
-  else {
-    die = parseInt(stuff[1]);
+  } else {
+    die = parseInt(bits[1]);
     mod = 0;
     }
-  total = rpgpad.dice(count, die) + mod;
-  rpgpad.console.log('Dice Roll: ' + roll + ' = ' + total);
-  return total
+  return function() { return rpgpad.roll_dice(count, die, mod) };
   }
 
 
 rpgpad.SpellBook = function() {
+  // Definitions of all spells in game. Provides constructor for Mobs to memorize individual spells.
   function SpellRecord(lvl, segments, name, duration, description) {
-    // Create Spell Record
+    // Create Spell Definition Record
     return {
       lvl: lvl,
       name: name,
@@ -222,10 +229,10 @@ rpgpad.SpellBook = function() {
     };
   return {
     memorize: function(spell) {
-      // return instance of memorized spell
-      foo = Object.spawn(this.spells[spell]);
-      foo.casted = false;
-      return foo;
+      // Return instance of memorized spell.
+      var vancian = Object.spawn(this.spells[spell]);
+      vancian.casted = false;
+      return vancian;
       },
     spells: {               // lvl, segments, name, duration, notes
       command:      SpellRecord(1,  1, 'Command', '1rds', ''),
@@ -252,21 +259,37 @@ rpgpad.SpellBook = function() {
 
 
 rpgpad.MonsterManual = function() {
-  var Mob = {
-    // Base Record class, "mob" is something players fight.
+  // Definitions of all mobs in game. "Mob" is something players fight.
+  // Provides constructors to create MobRecords
+  var MobRecord = {
+    // Base Record class,
     // "Record" being constructor function that create "smart" data records.
-    calc_loot: function() { return [] },
-    calc_spells: function() { return [] },
+    calc_loot: function() { return []; },
+    calc_spells: function() { return []; },
     parse_attack_routine: function(type, text, melee, ranged) {
       // ('claws', '+3 d6/+3 d6').  melee if melee attackable, ranged if ranged attackable, can be both.
       var bits, attacks = [];
       Ext.each(text.split('/'), function(attack) {
         bits = attack.split(' ');
-        attacks.push({type: type, text:attack, tohit:parseInt(bits[0]), damage:bits[1]});
+        attacks.push({type: type, text:attack, tohit:parseInt(bits[0]), calc_damage:rpgpad.parse_roll(bits[1])});
         });
       return {type: type, text: text, melee: melee, ranged: ranged, attacks: attacks};
       },
-    // Following methods are meant to be chained record.Mob(blah).routine(blah).routine(blah).spelllist(foo,bar)
+    /* Following methods are meant to be chained MobRecord(blah).routine(foo).routine(bar).spelllist(foo,bar) */
+    magic_resistance: function(amount) {
+      // Adds magic resistance to mob type.
+      this.special_defence.push(amount + '% mr');
+      this.test_mr = function() {
+        return rpgpad.roll_dice(1, 100) <= amount;
+        };
+      return this;
+      },
+    immunities: function() {
+      // Adds immunities to mob type.
+      var imm = Array.prototype.slice.call(arguments); // variable arguments
+      this.special_defence.push('imm ' + imm.join('/'));
+      return this;
+      },
     routine: function(type, attacks, ranged) {
       // Adds routine(1 target) attack option to mob type.
       this.attack_options.push(this.parse_attack_routine(type, attacks, true, ranged));
@@ -280,22 +303,21 @@ rpgpad.MonsterManual = function() {
     multi: function() {
       // Adds melee(multi targets) attack option to mob type.
       var multis = Array.prototype.slice.call(arguments); // variable arguments
-      var type='', text='', attacks = [];
+      var type=[], text=[], attacks = [];
       Ext.each(multis, function(stuff) {
-          // TODO: implement join
-        type += stuff[0] + ',';
-        text += stuff[1] + '/';
+        type.push(stuff[0]);
+        text.push(stuff[1]);
         attacks.push(this.parse_attack_routine(stuff[0], stuff[1], true))
         }, this);
-      this.attack_options.push({type:type, text:text, multi:true, melee:true, attacks:attacks});
+      this.attack_options.push({type:type.join(', '), text:text.join('/'), multi:true, melee:true, attacks:attacks});
       return this;
       },
     spelllist: function() {
       // Adds specific spell list to mob type.
       var spells = Array.prototype.slice.call(arguments); // variable arguments
-      var list = [];
-      Ext.each(spells, function(spell) { list.push(rpgpad.SpellBook.memorize(spell)) });
       this.calc_spells = function() {
+        var list = [];
+        Ext.each(spells, function(spell) { list.push(rpgpad.SpellBook.memorize(spell)) });
         return list;
         };
       return this;
@@ -312,15 +334,9 @@ rpgpad.MonsterManual = function() {
       },
     };
 
-  var Monster = Object.spawn(Mob, {
-    calc_xp: function(hp) {
-      return rpgpad.xp_table[this.HD][0] + (hp * rpgpad.xp_table[this.HD][1]);
-      },
-    });
-
-  function MonsterRecord(type, HD, hpbonus, hpmin, ac, special) {
+  function MonsterRecord(type, HD, hpbonus, hpmin, ac, notes) {
     // Record constructor helper for "Monsters".
-    mob = Object.create(Monster);
+    var mob = Object.create(MobRecord);
     mob.count = 0;
     mob.type = type;
     mob.hitdice = function() {
@@ -331,49 +347,56 @@ rpgpad.MonsterManual = function() {
     mob.ac = ac;
     mob.HD = HD;
     mob.saves = rpgpad.saves.mon[ function(HD, bonus) { if (HD > 0 && bonus > 0) { return HD+2 } else { return HD+1 } }(HD, hpbonus) ];
-    mob.special = special;
+    mob.notes = notes;
+    mob.special_defence = [],
+    mob.special_attack = [],
     mob.attack_options = [];
+    mob.calc_xp = function(hp) {
+      return rpgpad.xp_table[this.HD][0] + (hp * rpgpad.xp_table[this.HD][1]);
+      };
     mob.calc_hp = function() {
                       // d6+2 aka 3-8 hitpoints for monsters
-      function roll_hp(hd) {return rpgpad.dice(hd, 6) + (hd*2) + hpbonus};
+      function roll_hp(hd) {return rpgpad.roll_dice(hd, 6, (hd*2) + hpbonus)};
       var roll;
       if (HD > 1) { // max(8) first HD
         roll = 8 + roll_hp(HD-1);
       } else if (HD == 1) {
         roll = roll_hp(1);
       } else { // 0HD assumed d4 hp
-        roll = rpgpad.dice(1, 4) + hpbonus
+        roll = rpgpad.roll_dice(1, 4, hpbonus)
         }
       return Math.max(hpmin, roll)
       };
     return mob;
     };
-  function BadGuyRecord(type, lvl, hitdie, conbonus, hpmin, ac, xp, special, klass, saves) {
-    // Record creation helper for human/demihuman mobs
-    // hitdie is size of dice to roll per level
+  function BadGuyRecord(type, lvl, hitdie, conbonus, hpmin, ac, xp, notes, klass, saves) {
+    // Record creation helper for human/demihuman mobs.
+    // hitdie is size of dice to roll per level.
     if (klass == undefined) { klass='ftr'; saves = rpgpad.saves.ftr };
-    poop = Object.spawn(Mob, {
+    var mob = Object.spawn(MobRecord, {
       count: 0,
       type: type,
       hitdice: lvl + klass,
       ac: ac,
       HD: lvl,
       saves: saves[lvl],
-      special: special,
+      notes: notes,
+      special_defence: [],
+      special_attack: [],
       attack_options: [],
       calc_hp: function() {
         var dice = Math.max(1, lvl);
-        var roll = rpgpad.dice(dice, hitdie) + (dice*conbonus);
+        var roll = rpgpad.roll_dice(dice, hitdie, dice*conbonus);
         return Math.max(hpmin, roll);
         },
       calc_xp: function(hp) { return xp || rpgpad.xp_table[lvl][0] + (hp * rpgpad.xp_table[lvl][1]); },
       });
-    return Object.spawn(poop);
+    return Object.spawn(mob);
     };
 
   return {
     selectbox_list: function() {
-      // create array for selectbox
+      // Create array for Mob selectbox.
       var list = new Array();
       Ext.each(this.data, function(m) {
         list.push( {text: m.type, value: m} );
@@ -381,31 +404,32 @@ rpgpad.MonsterManual = function() {
       return list;
       },
     reset_counts: function() {
-      // mobs have seq #1 foo, #2 foo. reset that.
+      // Mobs have sequence #1 foo, #2 foo. Reset this sequence.
       Ext.each(this.data, function(m) {
         m.count = 0;
         });
         },
-    data: [                // type, lvl, hitdie, hdbonus, hpmin, ac, xp, special, saves
+    data: [                // type, lvl, hitdie, hdbonus, hpmin, ac, xp, notes, saves
+      MonsterRecord('Babbler', 5, 0,  0, 6, '40% hide, large yellow trex humanoid').multi(['r claw', '+5 d6'], ['l claw', '+5 d6'], ['bite', '+5 d8']).routine('poop', '+5 d100').magic_resistance(80),
       BadGuyRecord('Guard (xbow)', 0, 4, 3,  1, 5, 0, 'scale/sh').ranged('lt xbow', '+0 d6+1').routine('lng sw', '+0 d8'),
       BadGuyRecord('Guard (spear)', 0, 4, 3,  1, 5, 0, 'scale/sh').routine('spear', '+0 d6', true),
       BadGuyRecord('Guard (pole)', 0, 4, 3,  1, 5, 0, 'mail').routine('pole', '+0 d10'),
       BadGuyRecord('Sgt', 2,10, 0, 15, 4, 0, 'p unholy, mail/sh').routine('mstar', '+1 2d4').routine('lt xbow', '+1 d6+1'),
       BadGuyRecord('Lt', 4,10, 3, 31, 1, 0, 'p heal, plate/sh/-1').ranged('lbow', '+3 d6/+3 d6').routine('haxe', '+3 d6+1', true),
       BadGuyRecord('Alcolyte', 1, 8, 0,  4, 4, 0, 'p unholy, banded').routine('mace', '+1 d6+2').spelllist('curelt', 'bless', 'curse', 'command'),
-      BadGuyRecord('Lareth', 5, 8, 1, 39,-2, 0, 'imm para, +3 x2-3staff(20chg), +1plate/-4dx, 18 17 18 18 15 18').routine('staff/mace', '+6 3d6+5/+1 d4+2').spelllist('bless', 'protgood', 'command', 'curelt', 'sanctuary', 'aid', 'holdperson', 'silence15', 'resistfire', 'prayer', 'contdark'),
+      BadGuyRecord('Lareth', 5, 8, 1, 39,-2, 0, '+3 x2-3staff(20chg), +1plate/-4dx, 18 17 18 18 15 18').routine('staff/mace', '+6 3d6+5/+1 d4+2').spelllist('bless', 'protgood', 'command', 'curelt', 'sanctuary', 'aid', 'holdperson', 'silence15', 'resistfire', 'prayer', 'contdark').immunities('para'),
       BadGuyRecord('Apprentice', 3, 8, 1, 14, 1, 0, 'p climb, turned to metal, pain mace, -3dx, 16 17 18 17 15 14').routine('mace', '+1 d6+2').spelllist('sanctuary', 'silence15', 'holdperson', 'curse', 'curelt', 'command', 'resistfire'),
 
-                        // type, HD, hpbonus, hpmin, ac, special
+                        // type, HD, hpbonus, hpmin, ac, notes
       MonsterRecord('War Dog', 2, 2, 10, 4, 'barding').routine('bite', '+3 2d4'),
 
-      MonsterRecord('Skeleton', 1, 0,  1, 7, 'imm cold/sleep/charm/hold/mental').routine('melee', '+1 d6'),
-      MonsterRecord('Zombie', 2, 0,  1, 8, 'imm cold/sleep/charm/hold/mental').routine('melee', '+2 d8'),
-      MonsterRecord('Ghoul', 2, 0,  2, 6, 'para, imm sleep/charm').routine('c/c/b', '+2 d3/+2 d3/+2 d6'),
-      MonsterRecord('Ghast', 4, 0,  4, 4, 'stench(-2), para, imm sleep/charm/protevil').routine('c/c/b', '+4 d4/+4 d4/+4 d8'),
-      //MonsterRecord('Zombie Xvart', 3, 0,  8, 8, 'electrical, imm cold/sleep/charm/hold/mental').routine('melee', '+3 d8'),
-      //MonsterRecord('Zombling', 1, 0,  1, 8, 'leap').routine('melee', '+1 d4'),
-      //MonsterRecord('Zombie Turtle', 6, 0, 36, 2, 'imm cold/sleep/charm/hold/mental').routine('c/c/b', '+4 d6/+4 d6/+6 2d8'),
+      MonsterRecord('Skeleton', 1, 0,  1, 7, '').routine('melee', '+1 d6').immunities('cold', 'sleep', 'charm', 'hold', 'mental'),
+      MonsterRecord('Zombie', 2, 0,  1, 8, '').routine('melee', '+2 d8').immunities('cold', 'sleep', 'charm', 'hold', 'mental'),
+      MonsterRecord('Ghoul', 2, 0,  2, 6, 'para').routine('c/c/b', '+2 d3/+2 d3/+2 d6').immunities('sleep', 'charm'),
+      MonsterRecord('Ghast', 4, 0,  4, 4, 'stench(-2), para').routine('c/c/b', '+4 d4/+4 d4/+4 d8').immunities('sleep', 'charm', 'protevil'),
+      //MonsterRecord('Zombie Xvart', 3, 0,  8, 8, 'electrical').routine('melee', '+3 d8').immunities('cold', 'sleep', 'charm', 'hold', 'mental'),
+      //MonsterRecord('Zombling', 1, 0,  1, 8, 'leap').routine('melee', '+1 d4').immunities('cold', 'sleep', 'charm', 'hold', 'mental'),
+      //MonsterRecord('Zombie Turtle', 6, 0, 36, 2, '').routine('c/c/b', '+4 d6/+4 d6/+6 2d8').immunities('cold', 'sleep', 'charm', 'hold', 'mental'),
 
       MonsterRecord('G. Rat', 0, 0,  0, 7, '5%disease').routine('bite', '-1 d3'),
       MonsterRecord('G. Tick', 3, 0,  0, 3, 'blood drain').routine('bite', '+3 d4'),
@@ -430,8 +454,8 @@ rpgpad.MonsterManual = function() {
       MonsterRecord('Lizardman', 2, 1,  0, 5, '').routine('c/c/b', '+3 d2/+3 d2/+3 d8').ranged('javelin', '+3 d6').ranged('barbed darts', '+3 d3+1/+3 d3+1'),
       MonsterRecord('Lizardman Shaman', 2, 1,  22, 5, '').routine('c/c/b', '+7 d2/+7 d2/+7 d8').spelllist('curelt', 'protgood', 'detectmagic', 'resistfire', 'augury', 'speakanimals', 'dispel'),
 
-      MonsterRecord('Sea Hag', 4, 0,  0, 7, '50% mr, silver/coldiron,magic to hit, imm charm,fear,sleep,fire,cold, evil eye 3/day(vs poison), true appearence(vs spells) 1/2 str for d6 turns').routine('claws', '+4 d3+3/+4 d3+3').routine('trident', '+4 d8+3'),
-      MonsterRecord('Nereid', 4, 0,  0, 10, '50% mr, kiss drowns(vs poison), spittle blinds, infatuate males(no save) try to catch 50% nereids run away').ranged('water', '+4 d4', true).ranged('spittle', '+4 d0', true),
+      MonsterRecord('Sea Hag', 4, 0,  0, 7, 'silver/coldiron,magic to hit, evil eye 3/day(vs poison), true appearence(vs spells) 1/2 str for d6 turns').magic_resistance(50).routine('claws', '+4 d3+3/+4 d3+3').routine('trident', '+4 d8+3').immunities('charm', 'fear', 'sleep', 'fire', 'cold'),
+      MonsterRecord('Nereid', 4, 0,  0, 10, 'kiss drowns(vs poison), spittle blinds, infatuate males(no save) try to catch 50% nereids run away').ranged('water', '+4 d4', true).ranged('spittle', '+4 d0', true),
 
       MonsterRecord('Ogre', 4, 1, 20, 5, '').routine('melee', '+5 d10').ranged('rock', '+4 d6'),
 
@@ -483,11 +507,10 @@ rpgpad.MonsterManual = function() {
 rpgpad.melee_count = 0; // Global!
 
 rpgpad.new_melee = function() {
-  // A Melee is group of mobs and player characters, grouped cause they attack
-  // each other.
+  // A Melee is group of mobs and player characters that are positioned to ettack ach other.
   function MeleeHeader() {
-    // Melee title and list of participating characters
-    var mything = new Ext.Container({
+    // Melee title and list of participating characters.
+    var header = new Ext.Container({
       itemId: 'b_characters',
       cls: 'pc_list',
       layout: { type: 'hbox', pack: 'start', align: 'center' },
@@ -496,29 +519,30 @@ rpgpad.new_melee = function() {
       _title: 'Battle' + rpgpad.melee_count,
       _characters: [],
       // Methods
-      update_text: function() {
-        var txt = this._title + ':';
-        Ext.each(this._characters, function(c) { txt += ' ' + c.model.data.name; });
-        this.getComponent(0).update(txt);
-        this.getComponent(0).doComponentLayout();
-        },
-      add_character: function(character) {
-        if (this._characters.indexOf(character) == -1 ) { this._characters.push(character) };
-        this.update_text();
-        },
-      remove_character: function(character) {
-        if (this._characters.indexOf(character) != -1 ) { this._characters.remove(character) };
-        this.update_text();
-        },
       get_characters: function() {
         return this._characters;
         },
+      add_character: function(character) {
+        if (this._characters.indexOf(character) == -1 ) { this._characters.push(character) };
+        _update_text();
+        },
+      remove_character: function(character) {
+        if (this._characters.indexOf(character) != -1 ) { this._characters.remove(character) };
+        _update_text();
+        },
       });
-    mything.update_text();
-    return mything;
+    function _update_text() {
+      var txt = header._title + ':';
+      Ext.each(header._characters, function(c) { txt += ' ' + c.model.data.name; });
+      header.getComponent(0).update(txt);
+      header.getComponent(0).doComponentLayout();
+      }
+    _update_text();
+    return header;
     };
 
   function MobList() {
+    // Container below header, holds mobs.
     return new Ext.Container({
       title: 'mobs' + rpgpad.melee_count,
       itemId: 'm_mobs',
@@ -528,7 +552,7 @@ rpgpad.new_melee = function() {
     };
 
   function Mob(mm) {
-    // instance of a Mob, mm is mob record from monstermanual
+    // Instance of a Mob, mm is mob record from monstermanual.
     function mynameis() { return '#' + mm.count + ' ' + mm.type; };
     mm.count += 1;
     var hitpoints = mm.calc_hp();
@@ -567,23 +591,50 @@ rpgpad.new_melee = function() {
           },
         },
         { xtype:'spacer' },
-        { xtype:'textfield', name:'special', value: mm.special },
-        ]
+        { xtype:'textfield', name:'special', value: mm.notes + ' ' + mm.special_attack.join(', ') + ' ' + mm.special_defence.join(', ') },
+        ],
       });
     mob.toggle_selection = function(on) {
+      // Toggle/set Mob's selected.
       if (on == true) { this.selected = false }
       if (on == false) { this.selected = true }
       if (this.selected) {
         this.removeCls('selected');
         this.selected = false;
-        }
-      else {
+      } else {
         this.addCls('selected');
         this.selected = true;
         }
       };
+    mob.roll_mr = function () {
+      // Roll magic resistance.
+      if (mm.test_mr != undefined) {
+        return mm.test_mr;
+      } else {
+        return function() { return undefined; };
+        }
+      }();
+    mob.roll_saves = function() {
+      // Roll all saves.
+      var roll = rpgpad.roll_dice(1, 20);
+      return {roll: roll, aimed: roll-mm.saves[0], bw: roll-mm.saves[1], dpp: roll-mm.saves[2], pp: roll-mm.saves[3], spell: roll-mm.saves[4]};
+      };
+    mob.roll_attack = function(attack) {
+      // Roll one attack of an attack routine.
+      if (this.incapacitated == true) {
+        return { roll:0, hitac:'incapacitated', attack:0, damage:0 };
+        }
+      var roll = rpgpad.roll_dice(1, 20);
+      return {
+        roll: roll,
+        hitac: 20 - (roll + attack.tohit),
+        attack: roll + attack.tohit,
+        damage: attack.calc_damage(),
+        type: attack.type,
+        }
+      };
     mob.hitpoints = function(delta) {
-      // modify and return mob's hitpoints
+      // Modify and return mob's hitpoints.
       var control = this.getComponent('hitpoints');
       var hitpoints = parseInt(control.getValue()) + delta;
       control.setValue(hitpoints);
@@ -593,19 +644,19 @@ rpgpad.new_melee = function() {
       return hitpoints;
       };
     mob.dead = function() {
-      // mark mob as dead
+      // Mark mob as dead, send to killtab.
       rpgpad.KillTab.record_death(this.name, this.mm.type, this.xp);
       this._melee.remove_mob(this);
       return this;
       };
     mob.captured = function() {
-      // mark mob as captured
+      // Mark mob as captured, send to killtab.
       rpgpad.KillTab.record_capture(this.name, this.mm.type, this.xp);
       this._melee.remove_mob(this);
       return this;
       };
     mob.incapacitate = function(rounds) {
-      // mark mob as incapacitated
+      // Mark mob as incapacitated.
       this.incapacitated = true;
       this.addCls('incapacitated');
       this.getComponent('m_attack').setDisabled(true);
@@ -616,7 +667,7 @@ rpgpad.new_melee = function() {
       return this;
       };
     mob.revive = function() {
-      // mark mob as no longer incapacitated
+      // Mark mob as no longer incapacitated.
       this.incapacitated = false;
       this.removeCls('incapacitated');
       this.getComponent('m_attack').setDisabled(false);
@@ -626,7 +677,7 @@ rpgpad.new_melee = function() {
       return this;
       };
     mob.get_attacks = function() {
-      // return current attack routines/multi attacks.
+      // Return current attack routines/multi attacks.
       var attacks = [];
       if (this.attack.multi) {
         // already split into multiple attacks
@@ -642,7 +693,7 @@ rpgpad.new_melee = function() {
       return attacks;
       };
     mob.resolve_attacks = function(next_target, any_target, format) {
-      // Resolve all attacks mob.
+      // Resolve all attacks for mob.
       var result = '';
       Ext.each(this.get_attacks(), function(routine) {
         if (routine.multi) {
@@ -657,9 +708,9 @@ rpgpad.new_melee = function() {
       return result
       };
     mob.do_attack = function() {
-      // one mob's full attacks, no target, pops up overlay.
+      // One mob's full attacks, no target, pops up overlay.
       var html, result;
-      html = '<div align="center"><h3>' + this.name + '</h3>' + 'HD: ' + mm.HD + ' "' + this.attack['text'] + '"<br /><br /></div>';
+      html = '<div align="center"><h3>' + this.name + '</h3>' + 'HD: ' + this.mm.HD + ' "' + this.attack['text'] + '"<br /><br /></div>';
       Ext.each(this.get_attacks(), function(routine) {
         Ext.each(routine['attacks'], function(attack) {
           result = this.attack_html(this.roll_attack(attack), {ac:10});
@@ -669,27 +720,8 @@ rpgpad.new_melee = function() {
         }, this);
       this._melee.attack_overlay.my_show(html, this);
       };
-    mob.roll_saves = function() {
-      // Roll all saves.
-      var roll = rpgpad.dice(1, 20);
-      return {roll: roll, aimed: roll-mm.saves[0], bw: roll-mm.saves[1], dpp: roll-mm.saves[2], pp: roll-mm.saves[3], spell: roll-mm.saves[4]};
-      };
-    mob.roll_attack = function(attack) {
-      // Roll one attack of an attack routine.
-      if (this.incapacitated == true) {
-        return { roll:0, hitac:'incapacitated', attack:0, damage:0 };
-        }
-      var roll = rpgpad.dice(1, 20);
-      return {
-        roll: roll,
-        hitac: 20 - (roll + attack.tohit),
-        attack: roll + attack.tohit,
-        damage: rpgpad.roll(attack.damage),
-        type: attack.type,
-        }
-      };
     mob.attack_html = function(r, target) {
-      // r is mob.roll_attack result
+      // r is mob.roll_attack result.
       if (r.hitac == 'incapacitated') {
         return '(-) Incapacitated!'
       } else {
@@ -699,13 +731,13 @@ rpgpad.new_melee = function() {
         html = '<i>' + r.type +'</i> ';
         damage = name + r.damage + ' hits';
         if (r.roll == 20) {
-          return html += '<b>Hit</b>(<span style="color:green"><b>Natural 20!</b></span>) <span style="color:red"> ' + damage + '</span>';
+          return html += '<b>Hit</b> (<span style="color:green"><b>Natural 20!</b></span>) <span style="color:red"> ' + damage + '</span>';
         } else if (r.roll == 1) {
-          return html += '<b>Missed</b>(<span style="color:green"><b>Natural 1!</b></span>) ' + damage
+          return html += '<b>Missed</b> (<span style="color:green"><b>Natural 1!</b></span>) ' + damage
         } else if (r.hitac <= target.ac) {
-          return html += '<b>Hit</b>(AC' + r.hitac + ') <span style="color:red"> ' + damage + '</span>';
+          return html += '<b>Hit</b> (AC' + r.hitac + ') <span style="color:red"> ' + damage + '</span>';
         } else {
-          return html += '<b>Missed</b>(AC' + r.hitac + ') ' + damage;
+          return html += '<b>Missed</b> (AC' + r.hitac + ') ' + damage;
           }
         }
       };
@@ -837,7 +869,8 @@ rpgpad.new_melee = function() {
       }
     };
   action_overlay.show_save = function(name, save) {
-    // Show save results for multiple mobs.
+    // Show save and magic_resistance results for multiple mobs.
+    // TODO: magic_resistance is always in effect, up to user to determine if that is valid.
     var saves, roll, val, msg;
     var saved = [], failed = [];
     var html = '<h2>Save vs ' + name + '</h2>';
@@ -850,10 +883,19 @@ rpgpad.new_melee = function() {
         saved.push(m);
         m.toggle_selection();
         msg = ' <b>Saved</b> by ' + val + '!';
-        }
-      else {
-        failed.push(m);
-        msg = ' <b>Failed</b> by ' + Math.abs(val) + '.';
+      } else {
+        var mr = m.roll_mr();
+        if (mr == undefined) {
+          failed.push(m);
+          msg = ' <b>Failed Save</b> by ' + Math.abs(val) + '.';
+        } else if (mr) {
+          saved.push(m);
+          m.toggle_selection();
+          msg = ' <b>MR Rolled</b>, Failed Save by ' + Math.abs(val) + '.';
+        } else {
+          failed.push(m);
+          msg = ' <b>MR Failed, Failed Save</b> by ' + Math.abs(val) + '.';
+          }
         }
       rpgpad.console.log('"' + m.name + '" Save vs ' + name + ': (' + roll + ')' + msg);
       html += msg + '<br />';
@@ -861,6 +903,56 @@ rpgpad.new_melee = function() {
     this.hide();
     saves_overlay.my_show(html, saved, failed)
     };
+
+  var saves_overlay = new Ext.Panel({
+    modal: true,
+    floating: true,
+    centered: true,
+    styleHtmlContent: true,
+    cls: 'saves_overlay',
+    dockedItems: [
+      new Ext.Toolbar({
+        dock : 'bottom',
+        height: 54,
+        layout: { type:'hbox', align: 'stretch', pack: 'start' },
+        defaults: {margin: 6, },
+        items: [
+          { text: 'Incapacitate', handler: function(button, e) {
+              Ext.each(saves_overlay._failed, function(m) {
+                m.incapacitate()
+                });
+              saves_overlay.hide();
+            },
+          },
+          { xtype:'spacer' },
+          { xtype:'numberfield', itemId:'damage', cls:'bigtext', value:'0', width:60, },
+          { text: 'Damage', handler: function(button, e) {
+              var damage = parseInt(button.previousSibling().getValue());
+              if (damage > 0) {
+                var half = Math.floor(damage/2);
+                Ext.each(saves_overlay._failed, function(m) {
+                  rpgpad.console.log(m.name + ' took <b>' + damage + 'hits</b> from failed save.');
+                  m.hitpoints(-damage)
+                  });
+                Ext.each(saves_overlay._saved, function(m) {
+                  rpgpad.console.log(m.name + ' took <b>' + half + 'hits</b> from passed save.');
+                  m.hitpoints(-half)
+                  });
+              saves_overlay.hide();
+              }
+            },
+          },
+          ],
+        }),
+      ],
+    my_show: function(html, saved, failed) {
+      this._saved = saved;
+      this._failed = failed;
+      this.update(html);
+      this.show();
+      this.doComponentLayout();
+      },
+    });
 
   var spell_overlay = new Ext.Panel({
     modal: true,
@@ -887,52 +979,6 @@ rpgpad.new_melee = function() {
         };
       this.show();
       this.doLayout();
-      },
-    });
-
-  var saves_overlay = new Ext.Panel({
-    modal: true,
-    floating: true,
-    centered: true,
-    styleHtmlContent: true,
-    cls: 'saves_overlay',
-    dockedItems: [
-      new Ext.Toolbar({
-        dock : 'bottom',
-        height: 54,
-        layout: { type:'hbox', align: 'stretch', pack: 'start' },
-        defaults: {margin: 6, },
-        items: [
-          { text: 'Incapacitate', handler: function(button, e) {
-              Ext.each(saves_overlay._failed, function(m) { m.incapacitate() });
-              saves_overlay.hide();
-            },
-          },
-          { xtype:'spacer' },
-          { xtype:'numberfield', itemId:'damage', cls:'bigtext', value:'0', width:60, },
-          { text: 'Damage', handler: function(button, e) {
-              var damage = parseInt(button.previousSibling().getValue());
-              var half = Math.floor(damage/2);
-              Ext.each(saves_overlay._failed, function(m) {
-                rpgpad.console.log(m.name + ' took <b>' + damage + 'hits</b> from failed save.');
-                m.hitpoints(-damage)
-                });
-              Ext.each(saves_overlay._saved, function(m) {
-                rpgpad.console.log(m.name + ' took <b>' + half + 'hits</b> from passed save.');
-                m.hitpoints(-half)
-                });
-              saves_overlay.hide();
-            },
-          },
-          ],
-        }),
-      ],
-    my_show: function(html, saved, failed) {
-      this._saved = saved;
-      this._failed = failed;
-      this.update(html);
-      this.show();
-      this.doComponentLayout();
       },
     });
 
@@ -1005,8 +1051,7 @@ rpgpad.new_melee = function() {
             melee.clear_selected();
             if (count >= length) {
               mobs.each(function(m) { m.toggle_selection(true) });
-              }
-            else {
+            } else {
               var pick, these=new Array();
               for (var i=0; i < length; i++) {
                 these[i] = mobs.getAt(i);
@@ -1084,7 +1129,7 @@ rpgpad.new_melee = function() {
       var mobs = this.getComponent('m_mobs').items;
       var count = mobs.getCount()
       if (count > 0) {
-        return mobs.getAt(rpgpad.dice(1, count) - 1);
+        return mobs.getAt(rpgpad.randint(0, count-1));
         }
       },
     get_active: function() {
@@ -1482,6 +1527,8 @@ rpgpad.Main = Ext.extend(Ext.TabPanel, {
   launch: function() {
     rpgpad.KillTab.launch();
     rpgpad.Bullpen.launch();
+    rpgpad.App.setActiveItem(rpgpad.KillTab);
+    rpgpad.App.setActiveItem(rpgpad.CombatTab);
     },
   });
 
@@ -1495,4 +1542,3 @@ Ext.setup({
     rpgpad.App.doComponentLayout();
     }
   });
-
