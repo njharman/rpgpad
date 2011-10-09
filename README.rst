@@ -20,6 +20,10 @@ TODO
 ====
 
  - BUG: death/capture, xp award fails until killtab displayed at least once.
+ - Spell stats and info screen after casting.
+ - Ability to browse spellbook.
+ - Uniques; only one instance of.
+ - Uniques; Local storage unique mobs' state.
  - Unittests http://google-opensource.blogspot.com/2011/09/introducing-google-js-test.html
  - More Refactor butt ugly code/structure into something not so embarrasing.
  - Offline store of console log, clear log.
@@ -30,7 +34,6 @@ TODO
  - Distinguish betwen AC and nodex/noshield AC.
  - Record Loot.
  - Load Monster manual, Spell Book from url.
- - Local storage of unique monsters' state.
  - Treasure generation.
  - Random encounters.
  - Finish and integrate my Tablesmith_ table processing js lib.
