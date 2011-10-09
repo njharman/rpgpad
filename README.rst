@@ -6,7 +6,9 @@ iPad app to help me run OSRIC_ pen & paper role-playing games.
 
 Requirements & Install
 ======================
-It's a web app. Point iPad at web server serving up this code.
+Uses coffee script. ::
+
+    coffee --join j/lib.js -o j/ -c src/*.coffee
 
 Expects `Sencha Touch`__ css/js files to be added::
 
@@ -14,6 +16,8 @@ Expects `Sencha Touch`__ css/js files to be added::
     j/sencha-touch.js
 
 __ http://www.sencha.com/products/touch/
+
+After that, it's a web app.  Point iPad at HTTP server serving up this code.
 
 
 TODO

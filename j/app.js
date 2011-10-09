@@ -1,7 +1,6 @@
 /* vim: set expandtab tabstop=2 shiftwidth=2: */
 // Norman J. Harman Jr. njharman@gmail.com
 
-
 String.prototype.contains = function(it) { return this.indexOf(it) != -1; };
 
 if (typeof Object.create !== 'function') {
@@ -23,7 +22,6 @@ if (typeof Object.spawn !== 'function') {
     return Object.create(parent, defs);
     }
   }
-
 
 Ext.regModel('PC', {
   fields: [
@@ -158,48 +156,6 @@ rpgpad.xp_table = [
   ];
 
 
-rpgpad.randint = function(min, max) {
-  // Return random integer between min and max inclusive.
-  return min + Math.floor(Math.random() * max);
-  }
-
-rpgpad.roll_dice = function(count, sides, mod) {
-  // Return total of rolling count dice with x sides.
-  var roll, rolls=[], modtxt='', total = 0;
-  for (var i=count; i>0; i--) {
-    roll = rpgpad.randint(1, sides);
-    total += roll;
-    rolls.push(roll);
-    }
-  if (mod != undefined && mod != 0) {
-    total += mod;
-    modtxt = (mod > 0 ? '+' : '-') + mod;
-    }
-  rpgpad.console.log('Roll ' + count + 'd' + sides + modtxt + ': (' + rolls.join(',') + ') = ' + total);
-  return total;
-  }
-
-rpgpad.parse_roll = function(roll) {
-  // Parse "2d6+2" formated strings, return function that returns roll.
-  var more, die, mod, total, bits, count;
-  bits = roll.split('d');
-  count = !bits[0] ? 1 : parseInt(bits[0]);
-  if (bits[1].contains('+')) {
-    more = bits[1].split('+');
-    die = parseInt(more[0]);
-    mod = parseInt(more[1]);
-  } else if (bits[1].contains('-')) {
-    more = bits[1].split('-');
-    die = parseInt(more[0]);
-    mod = -parseInt(more[1]);
-  } else {
-    die = parseInt(bits[1]);
-    mod = 0;
-    }
-  return function() { return rpgpad.roll_dice(count, die, mod) };
-  }
-
-
 rpgpad.SpellBook = function() {
   // Definitions of all spells in game. Provides constructor for Mobs to memorize individual spells.
   function SpellRecord(lvl, segments, name, duration, description) {
@@ -287,7 +243,7 @@ rpgpad.MonsterManual = function() {
       var bits, attacks = [];
       Ext.each(text.split('/'), function(attack) {
         bits = attack.split(' ');
-        attacks.push({type: type, text:attack, tohit:parseInt(bits[0]), calc_damage:rpgpad.parse_roll(bits[1])});
+        attacks.push({type: type, text:attack, tohit:parseInt(bits[0]), calc_damage:Dice.parse(bits[1])});
         });
       return {type: type, text: text, melee: melee, ranged: ranged, attacks: attacks};
       },
@@ -296,7 +252,7 @@ rpgpad.MonsterManual = function() {
       // Adds magic resistance to mob type.
       this.special_defence.push(amount + '% mr');
       this.test_mr = function() {
-        return rpgpad.roll_dice(1, 100) <= amount;
+        return Dice.d100() <= amount;
         };
       return this;
       },
@@ -372,14 +328,14 @@ rpgpad.MonsterManual = function() {
       };
     mob.calc_hp = function() {
                       // d6+2 aka 3-8 hitpoints for monsters
-      function roll_hp(hd) {return rpgpad.roll_dice(hd, 6, (hd*2) + hpbonus)};
+      function roll_hp(hd) {return Dice.roll(hd, 6, (hd*2) + hpbonus)};
       var roll;
       if (HD > 1) { // max(8) first HD
         roll = 8 + roll_hp(HD-1);
       } else if (HD == 1) {
         roll = roll_hp(1);
       } else { // 0HD assumed d4 hp
-        roll = rpgpad.roll_dice(1, 4, hpbonus)
+        roll = Dice.roll(1, 4, hpbonus)
         }
       return Math.max(hpmin, roll)
       };
@@ -402,7 +358,7 @@ rpgpad.MonsterManual = function() {
       attack_options: [],
       calc_hp: function() {
         var dice = Math.max(1, lvl);
-        var roll = rpgpad.roll_dice(dice, hitdie, dice*conbonus);
+        var roll = Dice.roll(dice, hitdie, dice*conbonus);
         return Math.max(hpmin, roll);
         },
       calc_xp: function(hp) { return xp || rpgpad.xp_table[lvl][0] + (hp * rpgpad.xp_table[lvl][1]); },
@@ -662,7 +618,7 @@ rpgpad.new_melee = function() {
       }();
     mob.roll_saves = function() {
       // Roll all saves.
-      var roll = rpgpad.roll_dice(1, 20);
+      var roll = Dice.d20();
       return {roll: roll, aimed: roll-mm.saves[0], bw: roll-mm.saves[1], dpp: roll-mm.saves[2], pp: roll-mm.saves[3], spell: roll-mm.saves[4]};
       };
     mob.roll_attack = function(attack) {
@@ -670,7 +626,7 @@ rpgpad.new_melee = function() {
       if (this.incapacitated == true) {
         return { roll:0, hitac:'incapacitated', attack:0, damage:0 };
         }
-      var roll = rpgpad.roll_dice(1, 20);
+      var roll = Dice.d20();
       return {
         roll: roll,
         hitac: 20 - (roll + attack.tohit),
@@ -1103,7 +1059,7 @@ rpgpad.new_melee = function() {
                 these[i] = mobs.getAt(i);
                 }
               for (var i=count; i > 0; i--) {
-                pick = rpgpad.randint(0, these.length-1);
+                pick = Dice.randint(0, these.length-1);
                 these[pick].toggle_selection();
                 these.remove(these[pick]);
                 }
@@ -1175,7 +1131,7 @@ rpgpad.new_melee = function() {
       var mobs = this.getComponent('m_mobs').items;
       var count = mobs.getCount()
       if (count > 0) {
-        return mobs.getAt(rpgpad.randint(0, count-1));
+        return mobs.getAt(Dice.randint(0, count-1));
         }
       },
     get_active: function() {
@@ -1214,12 +1170,12 @@ rpgpad.new_melee = function() {
         }
       function any_target(mob, any) {
         // Grab target from all characters, no distribution.
-        return pcs[rpgpad.randint(0, pcs.length-1)];
+        return pcs[Dice.randint(0, pcs.length-1)];
         }
       function next_target(mob, any) {
         // Evenly distribute routines across targets.
         if (cpool.length == 0) { fill_pool(cpool) };
-        var c = cpool[rpgpad.randint(0, cpool.length-1)];
+        var c = cpool[Dice.randint(0, cpool.length-1)];
         cpool.remove(c);
         return c;
         }
