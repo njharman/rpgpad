@@ -1,29 +1,23 @@
 # vim: set expandtab tabstop=4 shiftwidth=4:
 # Norman J. Harman Jr. njharman@gmail.com
 
-namespace = (target, name, block) ->
-    [target, name, block] = [(if typeof exports isnt 'undefined' then exports else window), arguments...] if arguments.length < 3
-    top = target
-    target = target[item] or= {} for item in name.split '.'
-    block target, top
 
-
-namespace 'rpgpad.SpellBook', (self) ->
+namespace 'rpgpad.SpellBook', (self)->
     # Definitions of all spells in game. Provides constructor for Mobs to memorize individual spells.
-    self.memorize = (spell) ->
+    self.memorize = (spell)->
         # Return instance of memorized spell.
         new Spell(spells[spell]...)
 
     class Spell
         # Memorized Spell.
-        constructor: (@lvl, @segments, @name, @duration, @description) ->
+        constructor: (@lvl, @segments, @name, @duration, @description)->
             @casted = false
 
-        cast: (caster, target) ->
+        cast: (caster, target)->
             # Mark memorized spell as cast.
             target = if target? then " at #{ target }" else ""
             description = if this.description then " [#{ @description }]" else ""
-            rpgpad.console.log("\"#{ caster }\" casts #{ @name + description + @duration + target }.")
+            rpgpad.log("\"#{ caster }\" casts #{ @name + description + @duration + target }.")
             @casted = true
             @
 

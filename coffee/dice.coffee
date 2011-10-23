@@ -1,12 +1,6 @@
 # vim: set expandtab tabstop=4 shiftwidth=4:
 # Norman J. Harman Jr. njharman@gmail.com
 
-namespace = (target, name, block) ->
-    [target, name, block] = [(if typeof exports isnt 'undefined' then exports else window), arguments...] if arguments.length < 3
-    top = target
-    target = target[item] or= {} for item in name.split '.'
-    block target, top
-
 
 namespace 'Dice', (self) ->
     self.VERSION = '1.0.0'
@@ -33,7 +27,7 @@ namespace 'Dice', (self) ->
         else
             modtxt = ''
         # TODO: pass in log function somehow
-        rpgpad.console.log("Roll #{ count }d #{ sides + modtxt }: (#{ rolls.join(',') }) = #{ total }")
+        rpgpad.log("Roll #{ count }d #{ sides + modtxt }: (#{ rolls.join(',') }) = #{ total }")
         total
 
     self.parse = (roll) ->

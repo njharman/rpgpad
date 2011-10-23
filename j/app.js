@@ -35,21 +35,6 @@ Ext.regModel('PC', {
     },
   });
 
-Ext.regModel('Kill', {
-  fields: [
-    {name: 'id'},
-    {name: 'count',   type: 'int'},
-    {name: 'name',    type: 'string'},
-    {name: 'xp',      type: 'int'},
-    ],
-  proxy: {
-    id: 'kills',
-    type: 'localstorage'
-    },
-  });
-
-
-Ext.ns('rpgpad.record');
 
 
 rpgpad.melee_count = 0; // Global!
@@ -210,7 +195,7 @@ rpgpad.new_melee = function() {
       this.getComponent('m_attack').setDisabled(true);
       this.toggle_selection(false);
       if (this.incapacitated == true) {
-        rpgpad.console.log(this.name + ' incapacitated for ' + rounds + 'rnds.');
+        rpgpad.log(this.name + ' incapacitated for ' + rounds + 'rnds.');
         }
       return this;
       };
@@ -220,7 +205,7 @@ rpgpad.new_melee = function() {
       this.removeCls('incapacitated');
       this.getComponent('m_attack').setDisabled(false);
       if (this.incapacitated == true) {
-        rpgpad.console.log(this.name + ' revived.');
+        rpgpad.log(this.name + ' revived.');
         }
       return this;
       };
@@ -262,7 +247,7 @@ rpgpad.new_melee = function() {
       Ext.each(this.get_attacks(), function(routine) {
         Ext.each(routine['attacks'], function(attack) {
           result = this.attack_html(this.roll_attack(attack), {ac:10});
-          rpgpad.console.log('"' + this.name + '" Attack: ' + result);
+          rpgpad.log('"' + this.name + '" Attack: ' + result);
           html += '<h3>' + result + '</h3></div>'
           }, this);
         }, this);
@@ -445,7 +430,7 @@ rpgpad.new_melee = function() {
           msg = ' <b>MR Failed, Failed Save</b> by ' + Math.abs(val) + '.';
           }
         }
-      rpgpad.console.log('"' + m.name + '" Save vs ' + name + ': (' + roll + ')' + msg);
+      rpgpad.log('"' + m.name + '" Save vs ' + name + ': (' + roll + ')' + msg);
       html += msg + '<br />';
       });
     this.hide();
@@ -479,11 +464,11 @@ rpgpad.new_melee = function() {
               if (damage > 0) {
                 var half = Math.floor(damage/2);
                 Ext.each(saves_overlay._failed, function(m) {
-                  rpgpad.console.log(m.name + ' took <b>' + damage + 'hits</b> from failed save.');
+                  rpgpad.log(m.name + ' took <b>' + damage + 'hits</b> from failed save.');
                   m.hitpoints(-damage)
                   });
                 Ext.each(saves_overlay._saved, function(m) {
-                  rpgpad.console.log(m.name + ' took <b>' + half + 'hits</b> from passed save.');
+                  rpgpad.log(m.name + ' took <b>' + half + 'hits</b> from passed save.');
                   m.hitpoints(-half)
                   });
               saves_overlay.hide();
@@ -545,7 +530,7 @@ rpgpad.new_melee = function() {
         items: [
           { text: 'New', ui: 'confirm', handler: function(button, e) {
             var new_melee = rpgpad.new_melee()
-            rpgpad.console.log('<b>' + new_melee.title + ' started.</b>');
+            rpgpad.log('<b>' + new_melee.title + ' started.</b>');
             rpgpad.Combat.add(new_melee);
             rpgpad.Combat.doLayout();
             },
@@ -554,7 +539,7 @@ rpgpad.new_melee = function() {
             if (rpgpad.Combat.items.getCount() == 1 && melee.getComponent('m_mobs').items.getCount() == 0) {
               return;
               }
-            rpgpad.console.log('<b>' + melee.title + ' ended.</b>');
+            rpgpad.log('<b>' + melee.title + ' ended.</b>');
             melee.removeAll();
             rpgpad.Combat.remove(melee);
             if (rpgpad.Combat.items.getCount() == 0) {
@@ -645,7 +630,7 @@ rpgpad.new_melee = function() {
       return this.getComponent('b_characters').get_characters();
       },
     add_mob: function(mob) {
-      rpgpad.console.log('"' + mob.name + '" Added to ' + this.title);
+      rpgpad.log('"' + mob.name + '" Added to ' + this.title);
       mob._melee = this;
       var mobs = this.getComponent('m_mobs');
       mobs.add(mob);
@@ -654,7 +639,7 @@ rpgpad.new_melee = function() {
       return mob;
       },
     remove_mob: function(mob) {
-      rpgpad.console.log('"' + mob.name + '" Removed from ' + this.title);
+      rpgpad.log('"' + mob.name + '" Removed from ' + this.title);
       var mobs = this.getComponent('m_mobs');
       mobs.remove(mob);
       mobs.doLayout();
@@ -662,7 +647,7 @@ rpgpad.new_melee = function() {
       return mob;
       },
     move_mob: function(mob, new_home) {
-      rpgpad.console.log('"' + mob.name + '" moved from ' + this.title + ' to ' + new_home.title);
+      rpgpad.log('"' + mob.name + '" moved from ' + this.title + ' to ' + new_home.title);
       var mobs = this.getComponent('m_mobs');
       var nobs = new_home.getComponent('m_mobs');
       mobs.remove(mob, false);
@@ -704,7 +689,7 @@ rpgpad.new_melee = function() {
       mobs.each(function(m) { if (m.selected) { mob_list.push(m)} });
       return mob_list;
       },
-    clear_selected: function() {
+      clear_selected: function() {
       var mobs = this.getComponent('m_mobs').items;
       mobs.each(function(m) { m.toggle_selection(false) });
       },
@@ -726,7 +711,7 @@ rpgpad.new_melee = function() {
         return c;
         }
       function format_results(mob, result) {
-        rpgpad.console.log('"' + mob.name + '" Attack: ' + result);
+        rpgpad.log('"' + mob.name + '" Attack: ' + result);
         return '<h3>' + mob.name + ': ' + result + '</h3>'
         }
       var pcs, html='', cpool=[];
@@ -920,144 +905,14 @@ rpgpad.Bullpen = function() {
     });
   }();
 
-rpgpad.CombatTab = new Ext.Panel({
-  title: 'Combat',
-  cls: 'combat-tab',
-  iconCls: 'user',
-  height: '100%',
-  layout: { type: 'hbox', align: 'stretch' },
-  items: [rpgpad.Combat, rpgpad.Bullpen,],
-  });
 
-rpgpad.KillTab = new Ext.Panel({
-  title: 'Death Toll',
-  pile_store: new Ext.data.Store({
-    model: 'Kill',
-    autoLoad: false,
-    listeners: {
-      datachanged: {
-        fn: function(store) {
-          var xp = store.sum('xp');
-          rpgpad.KillTab.xp.update('<h2>'+ Math.floor(xp*1.2) + ' Monster Experience ' + xp + '</h2>');
-          },
-        },
-      },
-    }),
-  cls: 'deathtoll',
-  iconCls: 'x-icon-mask trash',
-  height: '100%',
-  width: '100%',
-  scroll: 'vertical',
-  layout: { type: 'vbox', align: 'stretch', pack: 'start', },
-  items: [
-    new Ext.Container({
-      height: 40,
-      layout: { type: 'hbox', align: 'stretch', pack: 'start', },
-      items: [
-        new Ext.Button({
-          text: 'Clear List',
-          margin: 5,
-          padding: '4 10 4 10',
-          handler: function(button, e) {
-            rpgpad.KillTab.empty();
-            },
-          }),
-        { xtype: 'component', margin: '0 0 0 60', padding: 0, styleHtmlContent: true},
-        ],
-      }),
-    { xtype: 'list', store: null, scroll: 'vertical',
-      disableSelection: true, loadingText: 'Loading...',
-      itemTpl:'{count} {name}, {xp} xp',
-      tpl: '<tpl for="."><div class="x-list-item-body">{count} {name}, {xp} xp</div></tpl>',
-    },
-    ],
-  launch: function() {
-    this.xp = this.items.getAt(0).items.getAt(1);
-    this.pile = this.items.getAt(1);
-    this.pile_store.load();
-    rpgpad.KillTab.pile.bindStore(rpgpad.KillTab.pile_store);
-    },
-  empty: function() {
-    this.pile_store.proxy.clear();
-    this.pile_store.load();
-    },
-  record_death: function(name, type, xp) {
-    rpgpad.console.log('"' + name + '" Defeated for <b>' + xp + 'xp</b>.');
-    this._upsert(type, xp);
-    },
-  record_capture: function(name, type, xp) {
-    xp = 2 * xp;
-    rpgpad.console.log('"' + name + '" Captured for <b>' + xp + 'xp</b>.');
-    this._upsert('(c)' + type, xp);
-    },
-  _upsert: function(name, xp) {
-    var record = this.pile_store.findRecord('name', name);
-    if (record == null) {
-      record = Ext.ModelMgr.create({count: 0, xp: 0, name: name}, 'Kill');
-      }
-    record.data.count += 1;
-    record.data.xp += xp;
-    record.save();
-    this.pile_store.load();
-    },
-  });
+rpgpad.ConsoleTab = new rpgpad.uiparts.ConsoleTab()
+rpgpad.log = rpgpad.ConsoleTab.log_callback()
+rpgpad.TreasureTab = new rpgpad.uiparts.TreasureTab()
+rpgpad.LootTab = new rpgpad.uiparts.LootTab()
+rpgpad.KillTab = new rpgpad.uiparts.KillTab()
+rpgpad.CombatTab = new rpgpad.uiparts.CombatTab()
 
-
-rpgpad.LootTab = new Ext.Panel({
-  title: 'Loot',
-  copper: 0,
-  silver: 0,
-  gold: 0,
-  plat: 0,
-  goods: {},  // gems and jewerly and such
-  cls: 'loot',
-  iconCls: 'favorites',
-  height: '100%',
-  width: '100%',
-  scroll: 'both',
-  layout: { type: 'vbox', align: 'stretch' },
-  defaults: { margin:'0 0 0 10 ', styleHtmlContent: true, },
-  items: [
-    { xtype: 'component', itemId: 'lt_coins', padding: 10, centered: true, },
-    ],
-  record: function(mob) {
-    var msg;
-    var msg = this.copper + 'cp ' + this.silver + 'sp ' + this.gold + 'gp ' + this.plat + 'pp';
-    this.getComponent('lt_coins').update('<h4>' + msg + '</h4>');
-    rpgpad.console.log('"' + mob.name + '" ' + msg);
-    this.copper += mob.treasure.copper;
-    this.silver += mob.treasure.silver;
-    this.gold += mob.treasure.gold;
-    this.plat += mob.treasure.plat;
-    },
-  });
-
-
-rpgpad.TreasureTab = new Ext.Panel({
-  title: 'Treasure',
-  cls: 'treasure',
-  iconCls: 'favorites',
-  scroll: 'both',
-  html: 'TODO',
-  });
-
-
-rpgpad.ConsoleTab = new Ext.Panel({
-  title: 'Console',
-  cls: 'console',
-  iconCls: 'info',
-  scroll: 'both',
-  html: '',
-  });
-
-rpgpad.console = {
-  log: function(msg) {
-    rpgpad.ConsoleTab.update('<li>' + msg + '</li>' + rpgpad.ConsoleTab.html);
-    },
-  clear: function() {
-    rpgpad.ConsoleTab.update('');
-    },
-  };
 
 rpgpad.Main = Ext.extend(Ext.TabPanel, {
   title: 'RPGPad',
@@ -1073,12 +928,12 @@ rpgpad.Main = Ext.extend(Ext.TabPanel, {
     rpgpad.ConsoleTab,
     ],
   launch: function() {
-    rpgpad.KillTab.launch();
     rpgpad.Bullpen.launch();
     rpgpad.App.setActiveItem(rpgpad.KillTab);
     rpgpad.App.setActiveItem(rpgpad.CombatTab);
     },
   });
+
 
 Ext.setup({
   icon: 'i/icon.png',
