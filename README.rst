@@ -1,28 +1,31 @@
 About
 =====
-*Super beta, draft, ugly, etc.*
 iPad app to help me run OSRIC_ pen & paper role-playing games.
+*Super beta, draft, ugly, etc.*
 
 
 Requirements & Install
 ======================
+It's a web app, point iPad at HTTP server serving up these files.
+
 Uses coffee script. ::
 
     coffee --join j/lib.js -o j/ -c src/*.coffee
 
-Expects `Sencha Touch`__ css/js files to be added::
+Expects `Sencha Touch`__ css/js files to be in following locations::
 
     c/sencha-touch.css
     j/sencha-touch.js
 
 __ http://www.sencha.com/products/touch/
 
-After that, it's a web app.  Point iPad at HTTP server serving up this code.
-
 
 TODO
 ====
 
+ - Morale
+ - Concept of rounds, durations, reload xbox etc.
+ - Concept of mob groups (for morale, movement, actions?)
  - BUG: death/capture, xp award fails until killtab displayed at least once.
  - Spell stats and info screen after casting.
  - Ability to browse spellbook.
